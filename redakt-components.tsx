@@ -84,7 +84,7 @@ export interface ToolbarProps {
   onZoomIn: () => void;
   onZoomOut: () => void;
   onToggleSearch: () => void;
-  onAiRedact: () => void;
+  onAutoRedact: () => void;
   onExport: () => void;
   onClearAll: () => void;
 }
@@ -122,7 +122,7 @@ export const Toolbar = (p: ToolbarProps) => {
       </div>
       <div className="sep" />
       <button className={`btn btn-ghost ${p.searchOpen ? "active-amber" : ""}`} onClick={p.onToggleSearch} title="/">🔍 Find</button>
-      <button className="btn btn-gold" onClick={p.onAiRedact} disabled={p.isLoading}>★ AI</button>
+      <button className="btn btn-gold" onClick={p.onAutoRedact} disabled={p.isLoading}>★ Auto</button>
       <div className="sep" />
       <button className="btn btn-red" onClick={p.onExport} disabled={p.isLoading}>↓ Export</button>
       <button className="btn btn-ghost" onClick={p.onClearAll} disabled={!p.hasRedactions}>↺</button>
@@ -194,7 +194,7 @@ export interface StatsPanelProps {
   boxes: RedactionBox[];
   redactionsPerPage: Map<number, number>;
   isLoading: boolean;
-  onAiRedact: () => void;
+  onAutoRedact: () => void;
   onExport: () => void;
 }
 
@@ -203,7 +203,7 @@ export const StatsPanel = ({
   boxes,
   redactionsPerPage,
   isLoading,
-  onAiRedact,
+  onAutoRedact,
   onExport,
 }: StatsPanelProps) => {
   const totalWords = pages.reduce((s, p) => s + p.textItems.length, 0);
@@ -246,7 +246,7 @@ export const StatsPanel = ({
 
       <div className="stats-section">
         <div className="stats-header">Quick Actions</div>
-        <button className="btn btn-gold full-width" onClick={onAiRedact} disabled={isLoading}>★ AI Auto-Redact</button>
+        <button className="btn btn-gold full-width" onClick={onAutoRedact} disabled={isLoading}>★ Auto-Redact</button>
         <button className="btn btn-red full-width mt-6" onClick={onExport}>↓ Export PDF</button>
       </div>
     </div>
@@ -553,8 +553,8 @@ export const LandingPage = ({ onTrySample, onPickFile, onAccountClick, onUpgrade
       <div className="hero-divider" />
       <p className="hero-sub">
         Upload any PDF and obscure sensitive information with the precision
-        of a federal agency. Click words, draw rectangles, search, or let AI
-        do the work. Everything runs locally in your browser — zero uploads,
+        of a federal agency. Click words, draw rectangles, search, or let local
+        auto-detection do the work. Everything runs locally in your browser — zero uploads,
         zero tracking.
       </p>
       <div className="hero-cta">
@@ -563,7 +563,7 @@ export const LandingPage = ({ onTrySample, onPickFile, onAccountClick, onUpgrade
       </div>
       <div className="hero-meta">
         <span>100% In-Browser</span>
-        <span>AI-Powered</span>
+        <span>Local Detection</span>
         <span>Zero Tracking</span>
       </div>
     </div>

@@ -29,8 +29,6 @@ export const STAMP_LABELS = {
   confidential: "CONFIDENTIAL",
 } as const;
 
-export const AI_MODEL = "claude-sonnet-4-20250514";
-
 export const TOOL_MODE_CONFIG: Record<ToolModeType, ToolModeConfig> = {
   smart: {
     activeClass: "active-blue",
@@ -83,8 +81,8 @@ export const LANDING_FEATURES: LandingFeature[] = [
   },
   {
     icon: "★",
-    title: "AI auto-redact",
-    description: "Claude identifies names, locations, dates, and sensitive numbers automatically",
+    title: "Local auto-redact",
+    description: "Detect names, dates, phone numbers, amounts, IDs, and codes without uploading content",
   },
   {
     icon: "🔍",
@@ -112,7 +110,7 @@ export const WORKFLOW_STEPS: WorkflowStep[] = [
   {
     number: "02",
     title: "Redact",
-    description: "Click on words, drag across paragraphs, or let the AI handle it.",
+    description: "Click on words, drag across paragraphs, or run local auto-detection.",
   },
   {
     number: "03",

@@ -1,6 +1,6 @@
-import { AI_MODEL, CDN, STAMP_LABELS, RENDER_SCALE } from "./redakt-constants";
-import { loadExternalScript } from "./redakt-utils";
-import type { ExportOptions, PageData } from "./redakt-types";
+import { CDN, STAMP_LABELS, RENDER_SCALE } from "./redakt-constants";
+import { loadExternalScript, wordToBox } from "./redakt-utils";
+import type { ExportOptions, PageData, RedactionBox } from "./redakt-types";
 
 export async function loadPdfDocument(
   file: File,
@@ -245,24 +245,95 @@ export async function exportRedactedPdf(
   doc.save(`${opts.filename || "redacted_document"}.pdf`);
 }
 
-export async function requestAiRedactionTerms(pages: PageData[]): Promise<string[]> {
-  const corpus = pages
-    .map((p, pi) => `[PAGE ${pi + 1}] ` + p.textItems.map((t) => t.text).join(" "))
-    .join("\n");
+const SENSITIVE_LABELS = new Set([
+  "account",
+  "badge",
+  "code",
+  "contact",
+  "date",
+  "flight",
+  "passport",
+  "plate",
+]);
 
-  const prompt = `You are a CIA analyst. Return ONLY a JSON array of exact strings to redact from this document. Include: proper names, locations, phone numbers, codes, operational dates, monetary amounts, identification numbers (passport, badge, account, flight).\n\n${corpus}\n\nReturn only the JSON array, nothing else.`;
+const MONTHS = new Set([
+  "january",
+  "february",
+  "march",
+  "april",
+  "may",
+  "june",
+  "july",
+  "august",
+  "september",
+  "october",
+  "november",
+  "december",
+]);
 
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: AI_MODEL,
-      max_tokens: 2000,
-      messages: [{ role: "user", content: prompt }],
-    }),
+const TITLES = new Set([
+  "agent",
+  "captain",
+  "cpt",
+  "director",
+  "dr",
+  "maj",
+  "major",
+  "senator",
+  "sgt",
+]);
+
+const cleanToken = (text: string): string =>
+  text.replace(/^[^\w+@]+|[^\w@.+-]+$/g, "");
+
+const isCapitalized = (token: string): boolean =>
+  /^[A-Z][a-z]{2,}$/.test(token) || /^[A-Z]\.$/.test(token);
+
+const isSensitiveToken = (token: string): boolean => {
+  const lower = token.toLowerCase();
+  return (
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(token) ||
+    /^\+?\d[\d().-]{5,}\d$/.test(token) ||
+    /^(?:usd|eur|gbp|\$)?\d{1,3}(?:,\d{3})+(?:\.\d{2})?$/i.test(token) ||
+    /^\d{1,2}:\d{2}$/.test(token) ||
+    /^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}$/.test(token) ||
+    /^[A-Z]{1,4}-?\d{2,}(?:-[A-Z0-9]+)*$/i.test(token) ||
+    MONTHS.has(lower)
+  );
+};
+
+export function detectSensitiveRedactionBoxes(pages: PageData[]): RedactionBox[] {
+  return pages.flatMap((page, pageIdx) => {
+    const selected = new Set<number>();
+    const tokens = page.textItems.map((item) => cleanToken(item.text));
+
+    tokens.forEach((token, index) => {
+      const lower = token.toLowerCase();
+      const prevLower = tokens[index - 1]?.toLowerCase();
+
+      if (isSensitiveToken(token) || SENSITIVE_LABELS.has(prevLower)) {
+        selected.add(index);
+      }
+
+      if (MONTHS.has(lower)) {
+        selected.add(index + 1);
+        selected.add(index + 2);
+      }
+
+      if (TITLES.has(prevLower) && isCapitalized(token)) {
+        selected.add(index);
+        if (isCapitalized(tokens[index + 1] ?? "")) selected.add(index + 1);
+        if (isCapitalized(tokens[index + 2] ?? "")) selected.add(index + 2);
+      }
+
+      if (isCapitalized(token) && isCapitalized(tokens[index + 1] ?? "")) {
+        selected.add(index);
+        selected.add(index + 1);
+      }
+    });
+
+    return Array.from(selected)
+      .filter((index) => page.textItems[index])
+      .map((index) => wordToBox(pageIdx, page.textItems[index]));
   });
-
-  const data = await res.json();
-  const raw = (data?.content?.[0]?.text ?? "[]").replace(/```json|```/g, "").trim();
-  return JSON.parse(raw);
 }

@@ -46,7 +46,7 @@ import {
   smartSelectionToBoxes,
   stripFileExt,
 } from "./redakt-utils";
-import { loadPdfDocument, generateSampleDocument, requestAiRedactionTerms, exportRedactedPdf } from "./redakt-services";
+import { loadPdfDocument, generateSampleDocument, detectSensitiveRedactionBoxes, exportRedactedPdf } from "./redakt-services";
 import { useAudio, useHistory, useKeyboardShortcuts, useScrollSpy, useToast } from "./redakt-hooks";
 import type {
   AccountState,
@@ -407,26 +407,20 @@ export default function EpsteinerApp() {
     showToast(`${matches.length} occurrence${matches.length === 1 ? "" : "s"} redacted`, "success");
   }, [audio, boxes, history, pages, searchTerm, showToast]);
 
-  const handleAiRedact = useCallback(async () => {
+  const handleAutoRedact = useCallback(() => {
     if (!hasDocument) {
       showToast("Load a PDF first", "error");
       return;
     }
 
-    setIsLoading(true);
-    setLoadingMsg("Running AI analysis…");
-    try {
-      const terms = await requestAiRedactionTerms(pages);
-      const hits = matchTermsAcrossPages(pages, terms);
-      history.set([...boxes, ...hits]);
-      audio.stamp();
-      showToast(`${hits.length} items redacted by AI`, "success");
-    } catch {
-      showToast("AI service error", "error");
-    } finally {
-      setIsLoading(false);
-      setLoadingMsg("");
+    const hits = detectSensitiveRedactionBoxes(pages);
+    if (hits.length === 0) {
+      showToast("No sensitive patterns found", "info");
+      return;
     }
+    history.set([...boxes, ...hits]);
+    audio.stamp();
+    showToast(`${hits.length} items auto-redacted`, "success");
   }, [audio, boxes, hasDocument, history, pages, showToast]);
 
   const handleExport = useCallback(async () => {
@@ -515,7 +509,7 @@ export default function EpsteinerApp() {
           onZoomIn={zoomIn}
           onZoomOut={zoomOut}
           onToggleSearch={() => setSearchOpen((s: boolean) => !s)}
-          onAiRedact={handleAiRedact}
+          onAutoRedact={handleAutoRedact}
           onExport={() => setExportOpen(true)}
           onClearAll={() => history.set([])}
         />
@@ -587,7 +581,7 @@ export default function EpsteinerApp() {
               boxes={boxes}
               redactionsPerPage={redactionsPerPage}
               isLoading={isLoading}
-              onAiRedact={handleAiRedact}
+              onAutoRedact={handleAutoRedact}
               onExport={() => setExportOpen(true)}
             />
           </div>

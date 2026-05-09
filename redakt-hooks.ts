@@ -134,7 +134,7 @@ export function useScrollSpy(
     const handler = () => {
       let best = 0;
       let bestDist = Infinity;
-      itemRefs.current.forEach((ref: HTMLDivElement | null, i: number) => {
+      itemRefs.current.forEach((ref: HTMLElement | null, i: number) => {
         if (!ref) return;
         const dist = Math.abs(ref.getBoundingClientRect().top - SCROLL_OFFSET);
         if (dist < bestDist) {

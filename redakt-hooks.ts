@@ -155,6 +155,26 @@ export function useScrollSpy(
   return active;
 }
 
+export function useIsTouchOrNarrow(): boolean {
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === "undefined") return false;
+    const narrow = window.matchMedia("(max-width: 720px)").matches;
+    const touch = "ontouchstart" in window || navigator.maxTouchPoints > 0;
+    return narrow || touch;
+  });
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 720px)");
+    const update = () => {
+      const touch = "ontouchstart" in window || navigator.maxTouchPoints > 0;
+      setIsMobile(mq.matches || touch);
+    };
+    mq.addEventListener?.("change", update);
+    return () => mq.removeEventListener?.("change", update);
+  }, []);
+  return isMobile;
+}
+
 export function useToast() {
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const show = useCallback((text: string, tone: ToastMessage["tone"] = "info") => {

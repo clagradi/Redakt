@@ -50,21 +50,40 @@ export const wordToBox = (pageIdx: number, item: TextItem): RedactionBox => ({
   h: item.h + WORD_PADDING * 2,
 });
 
-export const matchTextAcrossPages = (pages: PageData[], term: string): RedactionBox[] => {
-  const needle = term.trim().toLowerCase();
-  return needle ? matchTermsAcrossPages(pages, [needle]) : [];
+export type SearchOptions = { wholeWord?: boolean; caseSensitive?: boolean };
+
+export const matchTextAcrossPages = (
+  pages: PageData[],
+  term: string,
+  opts: SearchOptions = {},
+): RedactionBox[] => {
+  const trimmed = term.trim();
+  return trimmed ? matchTermsAcrossPages(pages, [trimmed], opts) : [];
 };
 
-export const matchTermsAcrossPages = (pages: PageData[], terms: string[]): RedactionBox[] => {
-  const needles = terms.map((term) => term.trim().toLowerCase()).filter(Boolean);
+export const matchTermsAcrossPages = (
+  pages: PageData[],
+  terms: string[],
+  opts: SearchOptions = {},
+): RedactionBox[] => {
+  const wholeWord = !!opts.wholeWord;
+  const ci = !opts.caseSensitive;
+  const needles = terms.map((t) => (ci ? t.trim().toLowerCase() : t.trim())).filter(Boolean);
   const out: RedactionBox[] = [];
   if (needles.length === 0) return out;
 
+  const stripPunct = (s: string) => s.replace(/^[^\w]+|[^\w]+$/g, "");
   pages.forEach((p, pi) => {
-    needles.forEach((needle) => {
-      p.textItems.forEach((it) => {
-        if (it.text.toLowerCase().includes(needle)) out.push(wordToBox(pi, it));
-      });
+    p.textItems.forEach((it) => {
+      const haystack = ci ? it.text.toLowerCase() : it.text;
+      const hay = wholeWord ? stripPunct(haystack) : haystack;
+      for (const needle of needles) {
+        const matches = wholeWord ? hay === needle : haystack.includes(needle);
+        if (matches) {
+          out.push(wordToBox(pi, it));
+          break;
+        }
+      }
     });
   });
   return out;

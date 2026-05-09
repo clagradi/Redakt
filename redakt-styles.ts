@@ -20,6 +20,20 @@ export const REDAKT_STYLES = `
       font-family:'Inter','system-ui',sans-serif;
     }
 
+    .mobile-banner {
+      background:linear-gradient(90deg,rgba(204,17,17,.18),rgba(184,150,12,.18));
+      border-bottom:1px solid var(--border2); color:var(--text);
+      padding:10px 16px; font-size:12px; line-height:1.45; display:flex;
+      align-items:center; gap:12px; flex-shrink:0; z-index:200;
+    }
+    .mobile-banner span { flex:1; }
+    .mobile-banner-close {
+      background:transparent; border:1px solid var(--border3); color:var(--text2);
+      width:24px; height:24px; line-height:1; cursor:pointer; flex-shrink:0;
+      font-size:16px; padding:0;
+    }
+    .mobile-banner-close:hover { color:var(--text); border-color:var(--text3); }
+
     ::-webkit-scrollbar { width:6px; height:6px; }
     ::-webkit-scrollbar-track { background:transparent; }
     ::-webkit-scrollbar-thumb { background:#1c1c1c; border-radius:3px; }

@@ -48,7 +48,7 @@ import {
   stripFileExt,
 } from "./redakt-utils";
 import { loadPdfDocument, generateSampleDocument, detectSensitiveRedactionBoxes, exportRedactedPdf } from "./redakt-services";
-import { useAudio, useHistory, useKeyboardShortcuts, useScrollSpy, useToast } from "./redakt-hooks";
+import { useAudio, useHistory, useIsTouchOrNarrow, useKeyboardShortcuts, useScrollSpy, useToast } from "./redakt-hooks";
 import type {
   AccountState,
   EditorMode,
@@ -81,6 +81,7 @@ export default function EpsteinerApp() {
   const [loadingMsg, setLoadingMsg] = useState("");
   const [loadProgress, setLoadProgress] = useState(0);
   const [searchTerm, setSearchTerm] = useState("");
+  const [searchWholeWord, setSearchWholeWord] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
@@ -108,6 +109,8 @@ export default function EpsteinerApp() {
 
   const audio = useAudio();
   const { toast, show: showToast } = useToast();
+  const isMobile = useIsTouchOrNarrow();
+  const [mobileBannerDismissed, setMobileBannerDismissed] = useState(false);
 
   const hasDocument = pages.length > 0;
   const zoomPercent = Math.round(zoom * 100);
@@ -138,7 +141,33 @@ export default function EpsteinerApp() {
       if (k === "s") setMode((m: EditorMode) => (m === "smart" ? "view" : "smart"));
       else if (k === "r") setMode((m: EditorMode) => (m === "rect" ? "view" : "rect"));
       else if (k === "e") setMode((m: EditorMode) => (m === "erase" ? "view" : "erase"));
-      else if (k === "escape") { setMode("view"); setHelpOpen(false); setExportOpen(false); }
+      else if (k === "escape") {
+        // Cancel any in-flight drag/selection first.
+        if (drawing) {
+          setDrawing(null);
+          drawStartRef.current = null;
+          activeDrawPageRef.current = null;
+        }
+        if (smartActiveRef.current) {
+          smartActiveRef.current = false;
+          smartBufferRef.current = new Set();
+          smartActivePageRef.current = null;
+          setSmartSel(new Set());
+        }
+        if (eraseActiveRef.current) {
+          eraseActiveRef.current = false;
+          eraseBufferRef.current = new Set();
+          eraseActivePageRef.current = null;
+          setPendingEraseIndexes(new Set());
+        }
+        // Close any open overlay.
+        if (helpOpen) setHelpOpen(false);
+        else if (exportOpen) setExportOpen(false);
+        else if (accountOpen) setAccountOpen(false);
+        else if (paywallOpen) setPaywallOpen(false);
+        else if (searchOpen) setSearchOpen(false);
+        else setMode("view");
+      }
       else if (k === "+" || k === "=") zoomIn();
       else if (k === "-") zoomOut();
       else if (e.key === "?") setHelpOpen((o: boolean) => !o);
@@ -147,13 +176,19 @@ export default function EpsteinerApp() {
         setSearchOpen(true);
       }
     }
-  }, [audio, history]));
+  }, [audio, history, drawing, helpOpen, exportOpen, accountOpen, paywallOpen, searchOpen]));
 
   const handleLoadFile = useCallback(async (file: File | null | undefined) => {
     if (!file) return;
     if (!file.name.toLowerCase().endsWith(".pdf") && file.type !== "application/pdf") {
       showToast("Unsupported format — PDF only", "error");
       return;
+    }
+    if (boxes.length > 0) {
+      const ok = window.confirm(
+        `You have ${boxes.length} redaction${boxes.length === 1 ? "" : "s"} on the current document. Loading a new file will discard them. Continue?`,
+      );
+      if (!ok) return;
     }
 
     setIsLoading(true);
@@ -189,7 +224,7 @@ export default function EpsteinerApp() {
       setLoadingMsg("");
       setLoadProgress(0);
     }
-  }, [history, showToast]);
+  }, [boxes.length, history, showToast]);
 
   const handleTrySample = useCallback(async () => {
     setIsLoading(true);
@@ -446,7 +481,7 @@ export default function EpsteinerApp() {
   }, [mode, removeRedactionByIndex]);
 
   const handleSearchSubmit = useCallback(() => {
-    const matches = matchTextAcrossPages(pages, searchTerm);
+    const matches = matchTextAcrossPages(pages, searchTerm, { wholeWord: searchWholeWord });
     if (matches.length === 0) {
       showToast("No matches found", "error");
       return;
@@ -454,7 +489,7 @@ export default function EpsteinerApp() {
     history.set([...boxes, ...matches]);
     audio.stamp();
     showToast(`${matches.length} occurrence${matches.length === 1 ? "" : "s"} redacted`, "success");
-  }, [audio, boxes, history, pages, searchTerm, showToast]);
+  }, [audio, boxes, history, pages, searchTerm, searchWholeWord, showToast]);
 
   const handleAutoRedact = useCallback(() => {
     if (!hasDocument) {
@@ -542,6 +577,13 @@ export default function EpsteinerApp() {
       <FileDropOverlay visible={fileOver} />
       <Toast toast={toast} />
 
+      {isMobile && !mobileBannerDismissed && (
+        <div className="mobile-banner">
+          <span>This editor is built for desktop. Drawing redactions on a phone is rough — open Epsteiner on a laptop for the real experience.</span>
+          <button className="mobile-banner-close" onClick={() => setMobileBannerDismissed(true)} aria-label="Dismiss">×</button>
+        </div>
+      )}
+
       <Header
         documentName={documentName}
         redactionCount={boxes.length}
@@ -593,6 +635,8 @@ export default function EpsteinerApp() {
           onChange={setSearchTerm}
           onSubmit={handleSearchSubmit}
           onClose={() => setSearchOpen(false)}
+          wholeWord={searchWholeWord}
+          onToggleWholeWord={() => setSearchWholeWord((w) => !w)}
         />
       )}
 

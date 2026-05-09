@@ -140,9 +140,11 @@ export interface SearchBarProps {
   onChange: (v: string) => void;
   onSubmit: () => void;
   onClose: () => void;
+  wholeWord: boolean;
+  onToggleWholeWord: () => void;
 }
 
-export const SearchBar = ({ value, onChange, onSubmit, onClose }: SearchBarProps) => (
+export const SearchBar = ({ value, onChange, onSubmit, onClose, wholeWord, onToggleWholeWord }: SearchBarProps) => (
   <div className="search-bar">
     <input
       className="search-input"
@@ -155,6 +157,13 @@ export const SearchBar = ({ value, onChange, onSubmit, onClose }: SearchBarProps
         if (e.key === "Escape") onClose();
       }}
     />
+    <button
+      className={`btn btn-ghost ${wholeWord ? "active-amber" : ""}`}
+      onClick={onToggleWholeWord}
+      title="Match whole words only"
+    >
+      Aa
+    </button>
     <button className="btn btn-green" onClick={onSubmit} disabled={!value.trim()}>Redact all</button>
     <span className="search-hint">↵ Confirm · Esc Close</span>
   </div>

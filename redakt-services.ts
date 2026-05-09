@@ -272,7 +272,12 @@ export async function exportRedactedPdf(
     );
   }
 
-  doc.save(`${opts.filename || "redacted_document"}.pdf`);
+  const safeName = (opts.filename || "redacted_document")
+    .normalize("NFKD")
+    .replace(/[^\w\s.-]+/g, "")
+    .replace(/\s+/g, "_")
+    .slice(0, 80) || "redacted_document";
+  doc.save(`${safeName}.pdf`);
 }
 
 const SENSITIVE_LABELS = new Set([

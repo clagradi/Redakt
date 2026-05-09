@@ -10,12 +10,14 @@ import {
 } from "react";
 
 import {
+  AccountModal,
   ExportModal,
   FileDropOverlay,
   Header,
   HelpModal,
   LandingPage,
   PageView,
+  PaywallModal,
   SearchBar,
   Sidebar,
   StatsPanel,
@@ -23,7 +25,18 @@ import {
   Toast,
   Toolbar,
 } from "./redakt-components";
-import { ZOOM, MIN_DRAW_SIZE } from "./redakt-constants";
+import {
+  canExportPdf,
+  createFreeAccount,
+  getBillingView,
+  isLaunchCodeValid,
+  isValidEmail,
+  loadAccountState,
+  recordPdfExport,
+  saveAccountState,
+  unlockAnnualPlan,
+} from "./redakt-billing";
+import { BILLING, ZOOM, MIN_DRAW_SIZE } from "./redakt-constants";
 import {
   clamp,
   clientToCanvas,
@@ -35,7 +48,15 @@ import {
 } from "./redakt-utils";
 import { loadPdfDocument, generateSampleDocument, requestAiRedactionTerms, exportRedactedPdf } from "./redakt-services";
 import { useAudio, useHistory, useKeyboardShortcuts, useScrollSpy, useToast } from "./redakt-hooks";
-import type { EditorMode, ExportOptions, PageData, Point2D, RedactionBox, SmartSelectionKey } from "./redakt-types";
+import type {
+  AccountState,
+  EditorMode,
+  ExportOptions,
+  PageData,
+  Point2D,
+  RedactionBox,
+  SmartSelectionKey,
+} from "./redakt-types";
 import { round2 } from "./redakt-utils";
 
 export default function EpsteinerApp() {
@@ -46,6 +67,7 @@ export default function EpsteinerApp() {
   const [zoom, setZoom] = useState(1);
   const [drawing, setDrawing] = useState<RedactionBox | null>(null);
   const [smartSelection, setSmartSel] = useState<Set<SmartSelectionKey>>(new Set());
+  const [pendingEraseIndexes, setPendingEraseIndexes] = useState<Set<number>>(new Set());
 
   const history = useHistory<RedactionBox[]>([]);
   const boxes = history.state;
@@ -56,8 +78,11 @@ export default function EpsteinerApp() {
   const [searchTerm, setSearchTerm] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [paywallOpen, setPaywallOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [fileOver, setFileOver] = useState(false);
+  const [account, setAccount] = useState<AccountState | null>(() => loadAccountState());
   const [exportOpts, setExportOpts] = useState<ExportOptions>({
     filename: "redacted_document",
     stamp: "redacted",
@@ -81,6 +106,7 @@ export default function EpsteinerApp() {
 
   const hasDocument = pages.length > 0;
   const zoomPercent = Math.round(zoom * 100);
+  const billingView = useMemo(() => getBillingView(account), [account]);
   const redactionsPerPage = useMemo(() => {
     const m = new Map<number, number>();
     boxes.forEach((b: RedactionBox) => m.set(b.pageIdx, (m.get(b.pageIdx) ?? 0) + 1));
@@ -179,6 +205,61 @@ export default function EpsteinerApp() {
     handleLoadFile(e.dataTransfer.files[0]);
   }, [handleLoadFile]);
 
+  const persistAccount = useCallback((nextAccount: AccountState | null) => {
+    setAccount(nextAccount);
+    saveAccountState(nextAccount);
+  }, []);
+
+  const handleRegisterAccount = useCallback((email: string) => {
+    if (!isValidEmail(email)) {
+      showToast("Enter a valid email", "error");
+      return;
+    }
+
+    const nextAccount = account
+      ? { ...account, email: email.trim().toLowerCase() }
+      : createFreeAccount(email);
+    persistAccount(nextAccount);
+    setAccountOpen(false);
+    showToast("Account ready", "success");
+  }, [account, persistAccount, showToast]);
+
+  const handleSignOut = useCallback(() => {
+    persistAccount(null);
+    setAccountOpen(false);
+    showToast("Signed out", "info");
+  }, [persistAccount, showToast]);
+
+  const handleOpenPaywall = useCallback(() => {
+    setAccountOpen(false);
+    setPaywallOpen(true);
+  }, []);
+
+  const handleOpenCheckout = useCallback(() => {
+    if (!BILLING.checkoutUrl) {
+      showToast("Add a checkout link in redakt-constants.ts", "info");
+      return;
+    }
+    window.open(BILLING.checkoutUrl, "_blank", "noopener,noreferrer");
+  }, [showToast]);
+
+  const handleUnlockCode = useCallback((code: string) => {
+    if (!account) {
+      setPaywallOpen(false);
+      setAccountOpen(true);
+      return;
+    }
+
+    if (!isLaunchCodeValid(code)) {
+      showToast("Invalid launch code", "error");
+      return;
+    }
+
+    persistAccount(unlockAnnualPlan(account));
+    setPaywallOpen(false);
+    showToast("Annual pass unlocked", "success");
+  }, [account, persistAccount, showToast]);
+
   const removeRedactionByIndex = useCallback((globalIdx: number) => {
     history.set(boxes.filter((_: RedactionBox, i: number) => i !== globalIdx));
     audio.click();
@@ -207,6 +288,7 @@ export default function EpsteinerApp() {
       eraseActivePageRef.current = pageIdx;
       eraseBufferRef.current = new Set();
       if (hitBoxIdx !== null) eraseBufferRef.current.add(hitBoxIdx);
+      setPendingEraseIndexes(new Set(eraseBufferRef.current));
       return;
     }
 
@@ -268,7 +350,10 @@ export default function EpsteinerApp() {
         const b = boxes[i];
         if (b.pageIdx !== pi) continue;
         if (point.x >= b.x && point.x <= b.x + b.w && point.y >= b.y && point.y <= b.y + b.h) {
-          eraseBufferRef.current.add(i);
+          if (!eraseBufferRef.current.has(i)) {
+            eraseBufferRef.current.add(i);
+            setPendingEraseIndexes(new Set(eraseBufferRef.current));
+          }
           break;
         }
       }
@@ -302,6 +387,7 @@ export default function EpsteinerApp() {
       }
       eraseBufferRef.current = new Set();
       eraseActivePageRef.current = null;
+      setPendingEraseIndexes(new Set());
     }
   }, [mode, drawing, boxes, pages, history, audio]);
 
@@ -350,10 +436,24 @@ export default function EpsteinerApp() {
     }
 
     setExportOpen(false);
+
+    if (!account) {
+      setAccountOpen(true);
+      showToast("Create a free account to export", "info");
+      return;
+    }
+
+    if (!canExportPdf(account)) {
+      setPaywallOpen(true);
+      showToast("Free exports used. Unlock annual pass.", "info");
+      return;
+    }
+
     setIsLoading(true);
     setLoadingMsg("Generating redacted PDF…");
     try {
       await exportRedactedPdf(pages, boxes, exportOpts);
+      persistAccount(recordPdfExport(account));
       audio.stamp();
       showToast("PDF exported", "success");
     } catch (err) {
@@ -363,7 +463,7 @@ export default function EpsteinerApp() {
       setIsLoading(false);
       setLoadingMsg("");
     }
-  }, [audio, boxes, exportOpts, hasDocument, pages, showToast]);
+  }, [account, audio, boxes, exportOpts, hasDocument, pages, persistAccount, showToast]);
 
   const jumpToPage = useCallback((i: number) => {
     pageRefs.current[i]?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -386,7 +486,10 @@ export default function EpsteinerApp() {
       <Header
         documentName={documentName}
         redactionCount={boxes.length}
+        accountLabel={billingView.accountLabel}
+        allowanceLabel={billingView.allowanceLabel}
         onHelpClick={() => setHelpOpen(true)}
+        onAccountClick={() => setAccountOpen(true)}
       />
 
       {isLoading && (
@@ -436,7 +539,12 @@ export default function EpsteinerApp() {
 
       {!hasDocument ? (
         <div className="main-scroll">
-          <LandingPage onTrySample={handleTrySample} onPickFile={() => fileInputRef.current?.click()} />
+          <LandingPage
+            onTrySample={handleTrySample}
+            onPickFile={() => fileInputRef.current?.click()}
+            onAccountClick={() => setAccountOpen(true)}
+            onUpgradeClick={handleOpenPaywall}
+          />
         </div>
       ) : (
         <>
@@ -462,6 +570,7 @@ export default function EpsteinerApp() {
                     globalBoxes={boxes}
                     drawing={drawing}
                     smartSelection={smartSelection}
+                    pendingEraseIndexes={pendingEraseIndexes}
                     onPointerDown={handlePointerDown}
                     onPointerMove={handlePointerMove}
                     onPointerUp={handlePointerUp}
@@ -495,6 +604,30 @@ export default function EpsteinerApp() {
           onChange={setExportOpts}
           onClose={() => setExportOpen(false)}
           onExport={handleExport}
+        />
+      )}
+
+      {accountOpen && (
+        <AccountModal
+          account={account}
+          onClose={() => setAccountOpen(false)}
+          onRegister={handleRegisterAccount}
+          onSignOut={handleSignOut}
+          onUpgrade={handleOpenPaywall}
+        />
+      )}
+
+      {paywallOpen && (
+        <PaywallModal
+          account={account}
+          checkoutConfigured={Boolean(BILLING.checkoutUrl)}
+          onClose={() => setPaywallOpen(false)}
+          onOpenAccount={() => {
+            setPaywallOpen(false);
+            setAccountOpen(true);
+          }}
+          onCheckout={handleOpenCheckout}
+          onUnlockCode={handleUnlockCode}
         />
       )}
 

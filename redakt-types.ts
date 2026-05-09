@@ -32,6 +32,25 @@ export interface ExportOptions {
   watermark: string;
 }
 
+export type AccountPlan = "free" | "annual";
+
+export interface AccountState {
+  email: string;
+  plan: AccountPlan;
+  exportUsage: Record<string, number>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BillingView {
+  accountLabel: string;
+  allowanceLabel: string;
+  isSignedIn: boolean;
+  isAnnual: boolean;
+  usedExports: number;
+  remainingExports: number;
+}
+
 export interface ToastMessage {
   text: string;
   tone: "info" | "error" | "success";

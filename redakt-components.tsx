@@ -1,14 +1,9 @@
 import { REDAKT_STYLES } from "./redakt-styles";
-import { STAMP_LABELS, SHORTCUTS, TOOL_MODE_CONFIG, TOOL_MODES, LANDING_FEATURES, WORKFLOW_STEPS } from "./redakt-constants";
+import { useState, type ChangeEvent, type FormEvent, type KeyboardEvent, type ReactNode, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { BILLING, STAMP_LABELS, SHORTCUTS, TOOL_MODE_CONFIG, TOOL_MODES, LANDING_FEATURES, WORKFLOW_STEPS } from "./redakt-constants";
 import { boxToPercentStyle, toSmartSelectionKey, wordToBox } from "./redakt-utils";
 import type {
-  ChangeEvent,
-  KeyboardEvent,
-  ReactNode,
-  MouseEvent as ReactMouseEvent,
-  PointerEvent as ReactPointerEvent,
-} from "react";
-import type {
+  AccountState,
   EditorMode,
   SmartSelectionKey,
   PageData,
@@ -36,10 +31,20 @@ export const FileDropOverlay = ({ visible }: { visible: boolean }) =>
 export interface HeaderProps {
   documentName: string;
   redactionCount: number;
+  accountLabel: string;
+  allowanceLabel: string;
   onHelpClick: () => void;
+  onAccountClick: () => void;
 }
 
-export const Header = ({ documentName, redactionCount, onHelpClick }: HeaderProps) => (
+export const Header = ({
+  documentName,
+  redactionCount,
+  accountLabel,
+  allowanceLabel,
+  onHelpClick,
+  onAccountClick,
+}: HeaderProps) => (
   <div className="header">
     <div className="brand">
       <div className="seal">SIC</div>
@@ -55,6 +60,10 @@ export const Header = ({ documentName, redactionCount, onHelpClick }: HeaderProp
         </div>
       )}
       {redactionCount > 0 && <div className="stat-pill">{redactionCount} REDACTIONS</div>}
+      <button className="account-pill" onClick={onAccountClick}>
+        <span>{accountLabel}</span>
+        <small>{allowanceLabel}</small>
+      </button>
       <button className="btn btn-ghost" onClick={onHelpClick} aria-label="Show keyboard shortcuts">?</button>
     </div>
   </div>
@@ -253,6 +262,7 @@ export interface PageViewProps {
   boxes: RedactionBox[];
   drawing: RedactionBox | null;
   smartSelection: ReadonlySet<SmartSelectionKey>;
+  pendingEraseIndexes: ReadonlySet<number>;
   key?: number;
   onPointerDown: (e: ReactPointerEvent, pi: number) => void;
   onPointerMove: (e: ReactPointerEvent) => void;
@@ -276,10 +286,11 @@ export const PageView = (p: PageViewProps) => {
 
         {pageBoxes.map((box, _bi) => {
           const globalIdx = p.globalBoxes.indexOf(box);
+          const isPendingErase = p.pendingEraseIndexes.has(globalIdx);
           return (
             <div
               key={globalIdx}
-              className={`redaction-box ${isErase ? "erasable" : ""}`}
+              className={`redaction-box ${isErase ? "erasable" : ""} ${isPendingErase ? "erase-pending" : ""}`}
               style={boxToPercentStyle(box, p.page)}
               onClick={() => p.onEraseBox(globalIdx)}
             />
@@ -402,6 +413,115 @@ export const ExportModal = ({ options, onChange, onClose, onExport }: ExportModa
   );
 };
 
+export interface AccountModalProps {
+  account: AccountState | null;
+  onClose: () => void;
+  onRegister: (email: string) => void;
+  onSignOut: () => void;
+  onUpgrade: () => void;
+}
+
+export const AccountModal = ({ account, onClose, onRegister, onSignOut, onUpgrade }: AccountModalProps) => {
+  const [email, setEmail] = useState(account?.email ?? "");
+
+  const submit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    onRegister(email);
+  };
+
+  return (
+    <Modal title="Epsteiner Account" onClose={onClose}>
+      {account ? (
+        <div className="account-box">
+          <div className="account-email">{account.email}</div>
+          <div className="account-plan">{account.plan === "annual" ? "Annual Pass" : "Free account"}</div>
+          <div className="account-actions">
+            {account.plan === "free" && (
+              <button className="btn btn-gold" onClick={onUpgrade}>Unlock {BILLING.annualPrice}</button>
+            )}
+            <button className="btn btn-ghost" onClick={onSignOut}>Sign out</button>
+          </div>
+        </div>
+      ) : (
+        <form className="account-form" onSubmit={submit}>
+          <label className="field-label">Email</label>
+          <input
+            className="field-input"
+            type="text"
+            inputMode="email"
+            value={email}
+            placeholder="you@example.com"
+            onChange={(e: ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
+            autoFocus
+          />
+          <button className="btn btn-gold full-width" type="submit">Create free account</button>
+          <div className="account-note">
+            Free accounts get {BILLING.freeMonthlyExports} exports per month. Documents stay in this browser.
+          </div>
+        </form>
+      )}
+    </Modal>
+  );
+};
+
+export interface PaywallModalProps {
+  account: AccountState | null;
+  checkoutConfigured: boolean;
+  onClose: () => void;
+  onOpenAccount: () => void;
+  onCheckout: () => void;
+  onUnlockCode: (code: string) => void;
+}
+
+export const PaywallModal = ({
+  account,
+  checkoutConfigured,
+  onClose,
+  onOpenAccount,
+  onCheckout,
+  onUnlockCode,
+}: PaywallModalProps) => {
+  const [code, setCode] = useState("");
+
+  const submitCode = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    onUnlockCode(code);
+  };
+
+  return (
+    <Modal title="Unlock Epsteiner" onClose={onClose}>
+      <div className="paywall">
+        <div className="paywall-price">{BILLING.annualPrice}</div>
+        <div className="paywall-copy">
+          Annual pass unlocks unlimited PDF exports. Free accounts include {BILLING.freeMonthlyExports} exports per month.
+        </div>
+
+        {!account ? (
+          <button className="btn btn-gold full-width" onClick={onOpenAccount}>Create free account</button>
+        ) : (
+          <>
+            <button className="btn btn-gold full-width" onClick={onCheckout}>
+              {checkoutConfigured ? "Open checkout" : "Add checkout link"}
+            </button>
+            <form className="launch-code-form" onSubmit={submitCode}>
+              <label className="field-label">Launch code</label>
+              <div className="launch-code-row">
+                <input
+                  className="field-input"
+                  value={code}
+                  placeholder="SIC2026"
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => setCode(e.target.value)}
+                />
+                <button className="btn btn-ghost" type="submit">Apply</button>
+              </div>
+            </form>
+          </>
+        )}
+      </div>
+    </Modal>
+  );
+};
+
 export const HelpModal = ({ onClose }: { onClose: () => void }) => (
   <Modal title="Keyboard Shortcuts" onClose={onClose}>
     <div className="help-grid">
@@ -418,9 +538,11 @@ export const HelpModal = ({ onClose }: { onClose: () => void }) => (
 export interface LandingProps {
   onTrySample: () => void;
   onPickFile: () => void;
+  onAccountClick: () => void;
+  onUpgradeClick: () => void;
 }
 
-export const LandingPage = ({ onTrySample, onPickFile }: LandingProps) => (
+export const LandingPage = ({ onTrySample, onPickFile, onAccountClick, onUpgradeClick }: LandingProps) => (
   <div className="landing">
     <div className="hero">
       <div className="hero-stamp" style={{ top: "10%", left: "5%" }}>CLASSIFIED</div>
@@ -443,6 +565,27 @@ export const LandingPage = ({ onTrySample, onPickFile }: LandingProps) => (
         <span>100% In-Browser</span>
         <span>AI-Powered</span>
         <span>Zero Tracking</span>
+      </div>
+    </div>
+
+    <div className="pricing-band">
+      <div className="pricing-head">
+        <span>Simple launch pricing</span>
+        <strong>{BILLING.annualPrice}</strong>
+      </div>
+      <div className="pricing-grid">
+        <div className="pricing-plan">
+          <div className="plan-kicker">Free account</div>
+          <div className="plan-price">$0</div>
+          <div className="plan-copy">{BILLING.freeMonthlyExports} PDF exports per month. No card required.</div>
+          <button className="btn btn-ghost full-width" onClick={onAccountClick}>Create free account</button>
+        </div>
+        <div className="pricing-plan featured">
+          <div className="plan-kicker">Annual pass</div>
+          <div className="plan-price">{BILLING.annualPrice}</div>
+          <div className="plan-copy">Unlimited exports for people who just need the joke to work.</div>
+          <button className="btn btn-gold full-width" onClick={onUpgradeClick}>Unlock unlimited</button>
+        </div>
       </div>
     </div>
 

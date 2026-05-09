@@ -47,6 +47,14 @@ export const REDAKT_STYLES = `
     .stat-pill { font-family:'Oswald',sans-serif; font-size:9px; letter-spacing:1.5px;
       color:var(--red2); background:var(--red-dim);
       border:1px solid rgba(204,17,17,.25); padding:4px 8px; }
+    .account-pill { display:flex; flex-direction:column; align-items:flex-start; gap:1px;
+      min-width:118px; max-width:180px; padding:5px 9px; background:var(--bg3);
+      border:1px solid var(--border2); color:var(--text); cursor:pointer; overflow:hidden; }
+    .account-pill:hover { border-color:var(--gold); color:#ddd; }
+    .account-pill span { width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+      font-family:'Oswald',sans-serif; font-size:9px; letter-spacing:1.2px; text-transform:uppercase; }
+    .account-pill small { width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+      font-family:'JetBrains Mono',monospace; font-size:8px; color:var(--gold); }
 
     /* ── toolbar ────────────────────────────────────────────────────────────── */
     .toolbar { background:var(--bg2); border-bottom:1px solid var(--border);
@@ -134,6 +142,8 @@ export const REDAKT_STYLES = `
     .redaction-box { position:absolute; background:#040404; pointer-events:none; }
     .redaction-box.erasable { pointer-events:all; cursor:pointer; transition:background .1s; }
     .redaction-box.erasable:hover { background:rgba(100,0,0,.92); outline:1px solid var(--red2); }
+    .redaction-box.erase-pending { background:rgba(180,0,0,.9); outline:2px solid var(--gold);
+      box-shadow:0 0 0 1px rgba(0,0,0,.8),0 0 18px rgba(204,17,17,.35); }
     .redaction-box.erasable:hover::after { content:'✕'; position:absolute; inset:0;
       display:flex; align-items:center; justify-content:center;
       color:var(--red2); font-size:14px; font-family:'Oswald',sans-serif; font-weight:700; }
@@ -208,6 +218,27 @@ export const REDAKT_STYLES = `
     .hero-meta span::before { content:'■ '; color:var(--green2); }
     @keyframes fadeUp { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:translateY(0)} }
 
+    .pricing-band { padding:34px 24px 38px; background:var(--bg3);
+      border-top:1px solid var(--border); border-bottom:1px solid var(--border); }
+    .pricing-head { max-width:760px; margin:0 auto 16px; display:flex; align-items:end;
+      justify-content:space-between; gap:16px; }
+    .pricing-head span { font-family:'Oswald',sans-serif; font-size:10px; letter-spacing:3px;
+      color:var(--text3); text-transform:uppercase; }
+    .pricing-head strong { font-family:'Oswald',sans-serif; font-size:28px; color:var(--gold);
+      font-weight:400; }
+    .pricing-grid { max-width:760px; margin:0 auto; display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .pricing-plan { background:var(--bg2); border:1px solid var(--border2); padding:18px; }
+    .pricing-plan.featured { border-color:rgba(212,175,55,.55);
+      box-shadow:inset 0 0 0 1px rgba(212,175,55,.12); }
+    .plan-kicker { font-family:'Oswald',sans-serif; font-size:9px; letter-spacing:2.5px;
+      color:var(--text3); text-transform:uppercase; margin-bottom:8px; }
+    .plan-price { font-family:'Oswald',sans-serif; font-size:28px; color:#ddd; margin-bottom:8px; }
+    .plan-copy { min-height:38px; font-size:12px; color:var(--text2); line-height:1.5; margin-bottom:14px; }
+    @media (max-width:720px) {
+      .pricing-head, .pricing-grid { grid-template-columns:1fr; display:grid; }
+      .pricing-head { align-items:start; }
+    }
+
     .features { padding:60px 24px; background:var(--bg2);
       border-top:1px solid var(--border); border-bottom:1px solid var(--border); }
     .features-h { text-align:center; font-family:'Oswald',sans-serif; font-size:11px;
@@ -269,6 +300,18 @@ export const REDAKT_STYLES = `
       color:#ccc; font-family:'JetBrains Mono',monospace; font-size:12px;
       padding:8px 10px; outline:none; }
     .field-input:focus { border-color:var(--gold); }
+    .account-form { display:flex; flex-direction:column; gap:10px; }
+    .account-box { border:1px solid var(--border2); background:var(--bg3); padding:14px; }
+    .account-email { font-family:'JetBrains Mono',monospace; font-size:12px; color:#ddd; margin-bottom:6px; }
+    .account-plan { font-family:'Oswald',sans-serif; font-size:10px; letter-spacing:2px;
+      color:var(--gold); text-transform:uppercase; margin-bottom:14px; }
+    .account-actions { display:flex; gap:8px; flex-wrap:wrap; }
+    .account-note { font-size:11.5px; line-height:1.5; color:var(--text3); }
+    .paywall { display:flex; flex-direction:column; gap:14px; }
+    .paywall-price { font-family:'Oswald',sans-serif; font-size:34px; color:var(--gold); line-height:1; }
+    .paywall-copy { font-size:12px; line-height:1.6; color:var(--text2); }
+    .launch-code-form { display:flex; flex-direction:column; gap:6px; }
+    .launch-code-row { display:grid; grid-template-columns:1fr auto; gap:8px; }
     .stamp-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(110px,1fr)); gap:6px; }
     .stamp-option { padding:8px 10px; background:var(--bg4); border:1px solid var(--border2);
       cursor:pointer; text-align:center; font-family:'Oswald',sans-serif; font-size:9.5px;

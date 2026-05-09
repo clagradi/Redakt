@@ -38,7 +38,7 @@ import { useAudio, useHistory, useKeyboardShortcuts, useScrollSpy, useToast } fr
 import type { EditorMode, ExportOptions, PageData, Point2D, RedactionBox, SmartSelectionKey } from "./redakt-types";
 import { round2 } from "./redakt-utils";
 
-export default function RedaktApp() {
+export default function EpsteinerApp() {
   const [pages, setPages] = useState<PageData[]>([]);
   const [documentName, setDocumentName] = useState("");
 

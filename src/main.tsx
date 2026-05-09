@@ -1,6 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import RedaktApp from "../redakt-v7";
+import EpsteinerApp from "../redakt-v7";
 
 const root = document.getElementById("root");
 if (!root) {
@@ -9,6 +9,6 @@ if (!root) {
 
 createRoot(root).render(
   <StrictMode>
-    <RedaktApp />
+    <EpsteinerApp />
   </StrictMode>,
 );

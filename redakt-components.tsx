@@ -42,10 +42,10 @@ export interface HeaderProps {
 export const Header = ({ documentName, redactionCount, onHelpClick }: HeaderProps) => (
   <div className="header">
     <div className="brand">
-      <div className="seal">FBI</div>
+      <div className="seal">SIC</div>
       <div>
-        <div className="brand-name">REDAKT</div>
-        <span className="brand-tag">Classified-Grade Redaction</span>
+        <div className="brand-name">EPSTEINER</div>
+        <span className="brand-tag">Redaction Bureau (SIC Certified)</span>
       </div>
     </div>
     <div className="header-right">
@@ -426,8 +426,8 @@ export const LandingPage = ({ onTrySample, onPickFile }: LandingProps) => (
       <div className="hero-stamp" style={{ top: "10%", left: "5%" }}>CLASSIFIED</div>
       <div className="hero-stamp" style={{ bottom: "15%", right: "3%", animationDelay: "-3s" }}>TOP SECRET</div>
 
-      <div className="hero-pretitle">— Federal-Grade Document Redaction —</div>
-      <h1 className="hero-title">Redakt</h1>
+      <div className="hero-pretitle">— SIC Certified Document Obfuscation —</div>
+      <h1 className="hero-title">EPSTEINER</h1>
       <div className="hero-divider" />
       <p className="hero-sub">
         Upload any PDF and obscure sensitive information with the precision
@@ -475,7 +475,7 @@ export const LandingPage = ({ onTrySample, onPickFile }: LandingProps) => (
     </div>
 
     <div className="footer">
-      <div className="footer-text">REDAKT · Classified Materials Unit</div>
+      <div className="footer-text">EPSTEINER · Sponsored by SIC (Satirical Intelligence Center)</div>
     </div>
   </div>
 );

@@ -6,6 +6,11 @@
     <title>Redakt</title>
   </head>
   <body>
+    <script>
+      if (location.protocol === "file:") {
+        location.href = "http://127.0.0.1:4173/";
+      }
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

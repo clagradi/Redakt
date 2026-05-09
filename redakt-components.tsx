@@ -417,17 +417,25 @@ export const ExportModal = ({ options, onChange, onClose, onExport }: ExportModa
 export interface AccountModalProps {
   account: AccountState | null;
   onClose: () => void;
-  onRegister: (email: string) => void;
+  onRequestSignIn: (email: string) => Promise<void> | void;
   onSignOut: () => void;
   onUpgrade: () => void;
 }
 
-export const AccountModal = ({ account, onClose, onRegister, onSignOut, onUpgrade }: AccountModalProps) => {
+export const AccountModal = ({ account, onClose, onRequestSignIn, onSignOut, onUpgrade }: AccountModalProps) => {
   const [email, setEmail] = useState(account?.email ?? "");
+  const [busy, setBusy] = useState(false);
+  const [sent, setSent] = useState(false);
 
-  const submit = (e: FormEvent<HTMLFormElement>) => {
+  const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    onRegister(email);
+    setBusy(true);
+    try {
+      await onRequestSignIn(email);
+      setSent(true);
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -443,21 +451,32 @@ export const AccountModal = ({ account, onClose, onRegister, onSignOut, onUpgrad
             <button className="btn btn-ghost" onClick={onSignOut}>Sign out</button>
           </div>
         </div>
+      ) : sent ? (
+        <div className="account-box">
+          <div className="account-email">Check your inbox</div>
+          <div className="account-note">
+            We just sent a sign-in link to <strong>{email}</strong>. Click it to finish signing in.
+          </div>
+          <button className="btn btn-ghost" onClick={() => setSent(false)}>Use a different email</button>
+        </div>
       ) : (
         <form className="account-form" onSubmit={submit}>
           <label className="field-label">Email</label>
           <input
             className="field-input"
-            type="text"
+            type="email"
             inputMode="email"
             value={email}
             placeholder="you@example.com"
             onChange={(e: ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
             autoFocus
+            required
           />
-          <button className="btn btn-gold full-width" type="submit">Create free account</button>
+          <button className="btn btn-gold full-width" type="submit" disabled={busy}>
+            {busy ? "Sending…" : "Send sign-in link"}
+          </button>
           <div className="account-note">
-            Free accounts get {BILLING.freeMonthlyExports} exports per month. Documents stay in this browser.
+            We email you a one-tap link. No password. Free accounts get {BILLING.freeMonthlyExports} exports per month.
           </div>
         </form>
       )}
@@ -471,7 +490,6 @@ export interface PaywallModalProps {
   onClose: () => void;
   onOpenAccount: () => void;
   onCheckout: () => void;
-  onUnlockCode: (code: string) => void;
 }
 
 export const PaywallModal = ({
@@ -480,15 +498,12 @@ export const PaywallModal = ({
   onClose,
   onOpenAccount,
   onCheckout,
-  onUnlockCode,
 }: PaywallModalProps) => {
-  const [code, setCode] = useState("");
-
-  const submitCode = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    onUnlockCode(code);
+  const [busy, setBusy] = useState(false);
+  const handleCheckout = async () => {
+    setBusy(true);
+    try { await onCheckout(); } finally { setBusy(false); }
   };
-
   return (
     <Modal title="Unlock Epsteiner" onClose={onClose}>
       <div className="paywall">
@@ -498,25 +513,15 @@ export const PaywallModal = ({
         </div>
 
         {!account ? (
-          <button className="btn btn-gold full-width" onClick={onOpenAccount}>Create free account</button>
+          <button className="btn btn-gold full-width" onClick={onOpenAccount}>Sign in first</button>
         ) : (
-          <>
-            <button className="btn btn-gold full-width" onClick={onCheckout}>
-              {checkoutConfigured ? "Open checkout" : "Add checkout link"}
-            </button>
-            <form className="launch-code-form" onSubmit={submitCode}>
-              <label className="field-label">Launch code</label>
-              <div className="launch-code-row">
-                <input
-                  className="field-input"
-                  value={code}
-                  placeholder="SIC2026"
-                  onChange={(e: ChangeEvent<HTMLInputElement>) => setCode(e.target.value)}
-                />
-                <button className="btn btn-ghost" type="submit">Apply</button>
-              </div>
-            </form>
-          </>
+          <button
+            className="btn btn-gold full-width"
+            onClick={handleCheckout}
+            disabled={busy || !checkoutConfigured}
+          >
+            {busy ? "Opening checkout…" : checkoutConfigured ? "Continue to checkout" : "Checkout unavailable"}
+          </button>
         )}
       </div>
     </Modal>

@@ -17,8 +17,6 @@ export const ZOOM = { MIN: 0.5, MAX: 2.5, STEP: 0.25 } as const;
 export const BILLING = {
   freeMonthlyExports: 3,
   annualPrice: "$9/year",
-  launchCode: "SIC2026",
-  checkoutUrl: "",
 } as const;
 
 export const STAMP_LABELS = {

@@ -28,16 +28,16 @@ import {
 } from "./redakt-components";
 import {
   canExportPdf,
-  createFreeAccount,
+  fetchCurrentAccount,
   getBillingView,
-  isLaunchCodeValid,
-  isValidEmail,
-  loadAccountState,
+  isBackendConfigured,
+  onAccountChange,
   recordPdfExport,
-  saveAccountState,
-  unlockAnnualPlan,
+  requestSignIn,
+  signOut,
+  startCheckout,
 } from "./redakt-billing";
-import { BILLING, ZOOM, MIN_DRAW_SIZE } from "./redakt-constants";
+import { ZOOM, MIN_DRAW_SIZE } from "./redakt-constants";
 import {
   clamp,
   clientToCanvas,
@@ -87,7 +87,7 @@ export default function EpsteinerApp() {
   const [paywallOpen, setPaywallOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [fileOver, setFileOver] = useState(false);
-  const [account, setAccount] = useState<AccountState | null>(() => loadAccountState());
+  const [account, setAccount] = useState<AccountState | null>(null);
   const [exportOpts, setExportOpts] = useState<ExportOptions>({
     filename: "redacted_document",
     stamp: "redacted",
@@ -210,60 +210,84 @@ export default function EpsteinerApp() {
     handleLoadFile(e.dataTransfer.files[0]);
   }, [handleLoadFile]);
 
-  const persistAccount = useCallback((nextAccount: AccountState | null) => {
-    setAccount(nextAccount);
-    saveAccountState(nextAccount);
+  useEffect(() => {
+    let cancelled = false;
+    fetchCurrentAccount().then((acc) => {
+      if (!cancelled) setAccount(acc);
+    });
+    const unsub = onAccountChange((acc) => {
+      if (!cancelled) setAccount(acc);
+    });
+    return () => {
+      cancelled = true;
+      unsub();
+    };
   }, []);
 
-  const handleRegisterAccount = useCallback((email: string) => {
-    if (!isValidEmail(email)) {
-      showToast("Enter a valid email", "error");
+  // After Stripe Checkout returns to ?checkout=success, refresh account.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("checkout") === "success") {
+      showToast("Payment received — unlocking…", "success");
+      const refresh = async () => {
+        for (let i = 0; i < 6; i++) {
+          await new Promise((r) => setTimeout(r, 1000));
+          const acc = await fetchCurrentAccount();
+          if (acc?.plan === "annual") {
+            setAccount(acc);
+            showToast("Annual pass active", "success");
+            break;
+          }
+        }
+      };
+      refresh();
+      params.delete("checkout");
+      const next = window.location.pathname + (params.toString() ? `?${params}` : "");
+      window.history.replaceState({}, "", next);
+    } else if (params.get("checkout") === "cancel") {
+      showToast("Checkout cancelled", "info");
+      params.delete("checkout");
+      const next = window.location.pathname + (params.toString() ? `?${params}` : "");
+      window.history.replaceState({}, "", next);
+    }
+  }, [showToast]);
+
+  const handleRequestSignIn = useCallback(async (email: string) => {
+    const result = await requestSignIn(email);
+    if (!result.ok) {
+      showToast(result.error, "error");
       return;
     }
+    if (result.mode === "magic-link") {
+      showToast("Check your email for the sign-in link", "success");
+    } else {
+      showToast("Account ready (local mode)", "info");
+      const acc = await fetchCurrentAccount();
+      setAccount(acc);
+      setAccountOpen(false);
+    }
+  }, [showToast]);
 
-    const nextAccount = account
-      ? { ...account, email: email.trim().toLowerCase() }
-      : createFreeAccount(email);
-    persistAccount(nextAccount);
-    setAccountOpen(false);
-    showToast("Account ready", "success");
-  }, [account, persistAccount, showToast]);
-
-  const handleSignOut = useCallback(() => {
-    persistAccount(null);
+  const handleSignOut = useCallback(async () => {
+    await signOut();
+    setAccount(null);
     setAccountOpen(false);
     showToast("Signed out", "info");
-  }, [persistAccount, showToast]);
+  }, [showToast]);
 
   const handleOpenPaywall = useCallback(() => {
     setAccountOpen(false);
     setPaywallOpen(true);
   }, []);
 
-  const handleOpenCheckout = useCallback(() => {
-    if (!BILLING.checkoutUrl) {
-      showToast("Add a checkout link in redakt-constants.ts", "info");
+  const handleOpenCheckout = useCallback(async () => {
+    if (!isBackendConfigured) {
+      showToast("Backend not configured yet", "error");
       return;
     }
-    window.open(BILLING.checkoutUrl, "_blank", "noopener,noreferrer");
+    const res = await startCheckout();
+    if (!res.ok) showToast(res.error || "Checkout failed", "error");
   }, [showToast]);
-
-  const handleUnlockCode = useCallback((code: string) => {
-    if (!account) {
-      setPaywallOpen(false);
-      setAccountOpen(true);
-      return;
-    }
-
-    if (!isLaunchCodeValid(code)) {
-      showToast("Invalid launch code", "error");
-      return;
-    }
-
-    persistAccount(unlockAnnualPlan(account));
-    setPaywallOpen(false);
-    showToast("Annual pass unlocked", "success");
-  }, [account, persistAccount, showToast]);
 
   const removeRedactionByIndex = useCallback((globalIdx: number) => {
     history.set(boxes.filter((_: RedactionBox, i: number) => i !== globalIdx));
@@ -487,7 +511,8 @@ export default function EpsteinerApp() {
     setLoadingMsg("Generating redacted PDF…");
     try {
       await exportRedactedPdf(pages, boxes, exportOpts);
-      persistAccount(recordPdfExport(account));
+      const updated = await recordPdfExport(account);
+      setAccount(updated);
       audio.stamp();
       showToast("PDF exported", "success");
     } catch (err) {
@@ -497,7 +522,7 @@ export default function EpsteinerApp() {
       setIsLoading(false);
       setLoadingMsg("");
     }
-  }, [account, audio, boxes, exportOpts, hasDocument, pages, persistAccount, showToast]);
+  }, [account, audio, boxes, exportOpts, hasDocument, pages, showToast]);
 
   const jumpToPage = useCallback((i: number) => {
     pageRefs.current[i]?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -646,7 +671,7 @@ export default function EpsteinerApp() {
         <AccountModal
           account={account}
           onClose={() => setAccountOpen(false)}
-          onRegister={handleRegisterAccount}
+          onRequestSignIn={handleRequestSignIn}
           onSignOut={handleSignOut}
           onUpgrade={handleOpenPaywall}
         />
@@ -655,14 +680,13 @@ export default function EpsteinerApp() {
       {paywallOpen && (
         <PaywallModal
           account={account}
-          checkoutConfigured={Boolean(BILLING.checkoutUrl)}
+          checkoutConfigured={isBackendConfigured}
           onClose={() => setPaywallOpen(false)}
           onOpenAccount={() => {
             setPaywallOpen(false);
             setAccountOpen(true);
           }}
           onCheckout={handleOpenCheckout}
-          onUnlockCode={handleUnlockCode}
         />
       )}
 

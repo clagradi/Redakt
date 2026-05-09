@@ -1,13 +1,14 @@
 {
   "name": "redakt",
   "version": "1.0.0",
-  "description": "",
+  "description": "In-browser PDF redaction tool with a lightweight B2C paywall.",
   "main": "index.js",
   "private": true,
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "build": "tsc --noEmit",
-    "dev": "vite"
+    "build": "tsc --noEmit && vite build",
+    "dev": "vite",
+    "preview": "vite preview"
   },
   "keywords": [],
   "author": "",

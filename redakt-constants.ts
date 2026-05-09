@@ -48,7 +48,7 @@ export const TOOL_MODE_CONFIG: Record<ToolModeType, ToolModeConfig> = {
   },
 };
 
-export const TOOL_MODES: ToolMode[] = ["smart", "rect", "erase"];
+export const TOOL_MODES: ToolModeType[] = ["smart", "rect", "erase"];
 
 export const SHORTCUTS: Array<[label: string, key: string]> = [
   ["Smart mode (words)", "S"],

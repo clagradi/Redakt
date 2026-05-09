@@ -307,7 +307,7 @@ export const PageView = (p: PageViewProps) => {
           style={
             isView
               ? { display: "none" }
-              : { display: "block", pointerEvents: p.mode === "erase" ? "none" : "auto" }
+              : { display: "block" }
           }
           onPointerDown={(e: ReactPointerEvent) => p.onPointerDown(e, p.pageIdx)}
           onPointerMove={p.onPointerMove}

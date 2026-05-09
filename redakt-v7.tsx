@@ -70,6 +70,9 @@ export default function RedaktApp() {
   const smartActiveRef = useRef<boolean>(false);
   const smartBufferRef = useRef<Set<SmartSelectionKey>>(new Set());
   const smartActivePageRef = useRef<number | null>(null);
+  const eraseActiveRef = useRef<boolean>(false);
+  const eraseActivePageRef = useRef<number | null>(null);
+  const eraseBufferRef = useRef<Set<number>>(new Set());
   const pageRefs = useRef<(HTMLDivElement | null)[]>([]);
   const mainScrollRef = useRef<HTMLDivElement>(null);
 
@@ -176,8 +179,13 @@ export default function RedaktApp() {
     handleLoadFile(e.dataTransfer.files[0]);
   }, [handleLoadFile]);
 
+  const removeRedactionByIndex = useCallback((globalIdx: number) => {
+    history.set(boxes.filter((_: RedactionBox, i: number) => i !== globalIdx));
+    audio.click();
+  }, [audio, boxes, history]);
+
   const handlePointerDown = useCallback((e: ReactPointerEvent, pageIdx: number) => {
-    if (mode === "view" || mode === "erase") return;
+    if (mode === "view") return;
     e.preventDefault();
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
 
@@ -185,11 +193,32 @@ export default function RedaktApp() {
     if (!containerEl) return;
     const point = clientToCanvas(e.clientX, e.clientY, containerEl, pages[pageIdx]);
 
+    const hitBoxIdx = (() => {
+      for (let i = boxes.length - 1; i >= 0; i--) {
+        const b = boxes[i];
+        if (b.pageIdx !== pageIdx) continue;
+        if (point.x >= b.x && point.x <= b.x + b.w && point.y >= b.y && point.y <= b.y + b.h) return i;
+      }
+      return null;
+    })();
+
+    if (mode === "erase") {
+      eraseActiveRef.current = true;
+      eraseActivePageRef.current = pageIdx;
+      eraseBufferRef.current = new Set();
+      if (hitBoxIdx !== null) eraseBufferRef.current.add(hitBoxIdx);
+      return;
+    }
+
     if (mode === "rect") {
       activeDrawPageRef.current = pageIdx;
       drawStartRef.current = point;
       setDrawing({ pageIdx, x: point.x, y: point.y, w: 0, h: 0 });
     } else if (mode === "smart") {
+      if (hitBoxIdx !== null) {
+        removeRedactionByIndex(hitBoxIdx);
+        return;
+      }
       smartActiveRef.current = true;
       smartActivePageRef.current = pageIdx;
       smartBufferRef.current = new Set();
@@ -197,7 +226,7 @@ export default function RedaktApp() {
       if (wi !== -1) smartBufferRef.current.add(`${pageIdx}:${wi}` as SmartSelectionKey);
       setSmartSel(new Set(smartBufferRef.current));
     }
-  }, [mode, pages]);
+  }, [mode, pages, removeRedactionByIndex]);
 
   const handlePointerMove = useCallback((e: ReactPointerEvent) => {
     if (mode === "rect" && drawStartRef.current && activeDrawPageRef.current !== null) {
@@ -228,8 +257,23 @@ export default function RedaktApp() {
           setSmartSel(new Set(smartBufferRef.current));
         }
       }
+    } else if (mode === "erase" && eraseActiveRef.current && eraseActivePageRef.current !== null) {
+      e.preventDefault();
+      const pi = eraseActivePageRef.current;
+      const containerEl = pageRefs.current[pi];
+      if (!containerEl) return;
+      const point = clientToCanvas(e.clientX, e.clientY, containerEl, pages[pi]);
+
+      for (let i = boxes.length - 1; i >= 0; i--) {
+        const b = boxes[i];
+        if (b.pageIdx !== pi) continue;
+        if (point.x >= b.x && point.x <= b.x + b.w && point.y >= b.y && point.y <= b.y + b.h) {
+          eraseBufferRef.current.add(i);
+          break;
+        }
+      }
     }
-  }, [mode, pages]);
+  }, [mode, pages, boxes]);
 
   const handlePointerUp = useCallback(() => {
     if (mode === "rect") {
@@ -250,14 +294,21 @@ export default function RedaktApp() {
       smartBufferRef.current = new Set();
       smartActivePageRef.current = null;
       setSmartSel(new Set());
+    } else if (mode === "erase" && eraseActiveRef.current) {
+      eraseActiveRef.current = false;
+      if (eraseBufferRef.current.size > 0) {
+        history.set(boxes.filter((_: RedactionBox, i: number) => !eraseBufferRef.current.has(i)));
+        audio.click();
+      }
+      eraseBufferRef.current = new Set();
+      eraseActivePageRef.current = null;
     }
   }, [mode, drawing, boxes, pages, history, audio]);
 
   const handleEraseBox = useCallback((globalIdx: number) => {
     if (mode === "view") return;
-    history.set(boxes.filter((_: RedactionBox, i: number) => i !== globalIdx));
-    audio.click();
-  }, [mode, boxes, history, audio]);
+    removeRedactionByIndex(globalIdx);
+  }, [mode, removeRedactionByIndex]);
 
   const handleSearchSubmit = useCallback(() => {
     const matches = matchTextAcrossPages(pages, searchTerm);
@@ -434,7 +485,7 @@ export default function RedaktApp() {
 
           {mode === "smart" && <div className="hint-bar">Click a word · Hold and drag for multi-select</div>}
           {mode === "rect" && <div className="hint-bar">Hold and drag to draw a rectangle</div>}
-          {mode === "erase" && <div className="hint-bar">Tap a black bar to remove it</div>}
+          {mode === "erase" && <div className="hint-bar">Tap a redaction to remove it · Hold and drag for batch remove</div>}
         </>
       )}
 

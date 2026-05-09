@@ -211,12 +211,31 @@ export async function exportRedactedPdf(
   const first = pages[0];
   const doc = new jsPDF({ unit: "px", format: [first.width, first.height], compress: true });
 
-  pages.forEach((page, pi) => {
-    if (pi > 0) doc.addPage([page.width, page.height]);
-    doc.addImage(page.dataUrl, "JPEG", 0, 0, page.width, page.height);
+  const totalRedactions = boxes.length;
+  const exportedAt = new Date().toISOString().slice(0, 19).replace("T", " ") + " UTC";
 
-    doc.setFillColor(0, 0, 0);
-    boxes.filter((b) => b.pageIdx === pi).forEach((b) => doc.rect(b.x, b.y, b.w, b.h, "F"));
+  for (let pi = 0; pi < pages.length; pi++) {
+    const page = pages[pi];
+    if (pi > 0) doc.addPage([page.width, page.height]);
+
+    // Flatten page image + black redaction rects into a single raster.
+    // This prevents the original page bytes from being recoverable from the
+    // exported PDF (drawing rects as vector overlays leaves the source image intact).
+    const flat = document.createElement("canvas");
+    flat.width = page.width;
+    flat.height = page.height;
+    const fctx = flat.getContext("2d")!;
+    const img = new Image();
+    img.src = page.dataUrl;
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error("page image failed to load"));
+    });
+    fctx.drawImage(img, 0, 0, page.width, page.height);
+    fctx.fillStyle = "#000";
+    boxes.filter((b) => b.pageIdx === pi).forEach((b) => fctx.fillRect(b.x, b.y, b.w, b.h));
+
+    doc.addImage(flat.toDataURL("image/jpeg", 0.92), "JPEG", 0, 0, page.width, page.height);
 
     if (opts.stamp !== "none") {
       const label = STAMP_LABELS[opts.stamp];
@@ -240,7 +259,18 @@ export async function exportRedactedPdf(
       doc.text(wm, page.width / 2, page.height / 2, { align: "center", angle: -30 });
       (doc as any).setGState?.(new (doc as any).GState({ opacity: 1 }));
     }
-  });
+
+    // Audit footer
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(120, 120, 120);
+    doc.text(
+      `Redacted with Epsteiner — ${totalRedactions} region${totalRedactions === 1 ? "" : "s"} · page ${pi + 1}/${pages.length} · ${exportedAt}`,
+      page.width / 2,
+      page.height - 10,
+      { align: "center" },
+    );
+  }
 
   doc.save(`${opts.filename || "redacted_document"}.pdf`);
 }
@@ -289,14 +319,53 @@ const cleanToken = (text: string): string =>
 const isCapitalized = (token: string): boolean =>
   /^[A-Z][a-z]{2,}$/.test(token) || /^[A-Z]\.$/.test(token);
 
+const luhnValid = (digits: string): boolean => {
+  if (digits.length < 13 || digits.length > 19) return false;
+  let sum = 0;
+  let alt = false;
+  for (let i = digits.length - 1; i >= 0; i--) {
+    let n = digits.charCodeAt(i) - 48;
+    if (n < 0 || n > 9) return false;
+    if (alt) {
+      n *= 2;
+      if (n > 9) n -= 9;
+    }
+    sum += n;
+    alt = !alt;
+  }
+  return sum % 10 === 0;
+};
+
 const isSensitiveToken = (token: string): boolean => {
   const lower = token.toLowerCase();
+  const digits = token.replace(/[\s-]/g, "");
   return (
+    // email
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(token) ||
+    // url
+    /^https?:\/\/\S+$/i.test(token) ||
+    // phone
     /^\+?\d[\d().-]{5,}\d$/.test(token) ||
-    /^(?:usd|eur|gbp|\$)?\d{1,3}(?:,\d{3})+(?:\.\d{2})?$/i.test(token) ||
+    // currency / large amounts
+    /^(?:usd|eur|gbp|chf|\$|€|£)?\s?\d{1,3}(?:[,.]\d{3})+(?:[.,]\d{2})?$/i.test(token) ||
+    // time HH:MM
     /^\d{1,2}:\d{2}$/.test(token) ||
+    // dates
     /^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}$/.test(token) ||
+    /^\d{4}-\d{2}-\d{2}$/.test(token) ||
+    // IBAN (rough; 15-34 alphanumerics starting with 2 letters)
+    /^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/i.test(token.replace(/\s/g, "")) ||
+    // Italian Codice Fiscale
+    /^[A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z]$/i.test(token) ||
+    // US SSN
+    /^\d{3}-\d{2}-\d{4}$/.test(token) ||
+    // IPv4
+    /^(?:\d{1,3}\.){3}\d{1,3}$/.test(token) ||
+    // MAC
+    /^(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}$/i.test(token) ||
+    // credit card (Luhn-validated)
+    (/^\d{13,19}$/.test(digits) && luhnValid(digits)) ||
+    // generic alpha-numeric code (badge / passport / plate / account)
     /^[A-Z]{1,4}-?\d{2,}(?:-[A-Z0-9]+)*$/i.test(token) ||
     MONTHS.has(lower)
   );

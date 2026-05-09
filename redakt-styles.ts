@@ -137,16 +137,21 @@ export const REDAKT_STYLES = `
     .page-img { display:block; width:100%; height:auto; user-select:none; -webkit-user-drag:none; }
     .overlay { position:absolute; inset:0; z-index:10; touch-action:none; }
     .overlay.rect  { cursor:crosshair; }
-    .overlay.smart { cursor:text; }
-    .overlay.erase { cursor:default; }
+    .overlay.smart {
+      cursor:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 18 18'><rect x='4' y='2' width='2' height='14' fill='%23d4af37'/><rect x='1' y='2' width='8' height='2' fill='%23d4af37'/><rect x='1' y='14' width='8' height='2' fill='%23d4af37'/></svg>") 5 9, text;
+    }
+    .overlay.erase {
+      cursor:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'><rect x='2' y='2' width='16' height='16' fill='%23000' stroke='%23cc1111' stroke-width='1.5'/><path d='M6 6 L14 14 M14 6 L6 14' stroke='%23d4af37' stroke-width='2' stroke-linecap='square'/></svg>") 10 10, pointer;
+    }
     .redaction-box { position:absolute; background:#040404; pointer-events:none; }
-    .redaction-box.erasable { pointer-events:all; cursor:pointer; transition:background .1s; }
-    .redaction-box.erasable:hover { background:rgba(100,0,0,.92); outline:1px solid var(--red2); }
-    .redaction-box.erase-pending { background:rgba(180,0,0,.9); outline:2px solid var(--gold);
-      box-shadow:0 0 0 1px rgba(0,0,0,.8),0 0 18px rgba(204,17,17,.35); }
-    .redaction-box.erasable:hover::after { content:'✕'; position:absolute; inset:0;
+    .redaction-box.erasable { transition:background .1s, outline-color .1s; }
+    .redaction-box.erase-hover { background:rgba(120,0,0,.92); outline:1px solid var(--red2); }
+    .redaction-box.erase-hover::after { content:'✕'; position:absolute; inset:0;
       display:flex; align-items:center; justify-content:center;
-      color:var(--red2); font-size:14px; font-family:'Oswald',sans-serif; font-weight:700; }
+      color:var(--gold); font-size:14px; font-family:'Oswald',sans-serif; font-weight:700;
+      text-shadow:0 0 4px rgba(0,0,0,.9); }
+    .redaction-box.erase-pending { background:rgba(180,0,0,.95); outline:2px solid var(--gold);
+      box-shadow:0 0 0 1px rgba(0,0,0,.8),0 0 18px rgba(204,17,17,.45); }
     .rect-ghost { position:absolute; background:rgba(180,0,0,.3);
       border:1.5px dashed var(--red2); pointer-events:none; z-index:20; }
     .word-highlight { position:absolute; background:rgba(180,0,0,.45); pointer-events:none;

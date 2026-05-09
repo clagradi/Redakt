@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -68,6 +69,10 @@ export default function EpsteinerApp() {
   const [drawing, setDrawing] = useState<RedactionBox | null>(null);
   const [smartSelection, setSmartSel] = useState<Set<SmartSelectionKey>>(new Set());
   const [pendingEraseIndexes, setPendingEraseIndexes] = useState<Set<number>>(new Set());
+  const [eraseHoverIdx, setEraseHoverIdx] = useState<number | null>(null);
+  useEffect(() => {
+    if (mode !== "erase" && eraseHoverIdx !== null) setEraseHoverIdx(null);
+  }, [mode, eraseHoverIdx]);
 
   const history = useHistory<RedactionBox[]>([]);
   const boxes = history.state;
@@ -339,26 +344,46 @@ export default function EpsteinerApp() {
           setSmartSel(new Set(smartBufferRef.current));
         }
       }
-    } else if (mode === "erase" && eraseActiveRef.current && eraseActivePageRef.current !== null) {
-      e.preventDefault();
-      const pi = eraseActivePageRef.current;
-      const containerEl = pageRefs.current[pi];
+    } else if (mode === "erase") {
+      const dragging = eraseActiveRef.current && eraseActivePageRef.current !== null;
+      const pi = dragging ? eraseActivePageRef.current! : null;
+      const hoverPage = pi !== null
+        ? pi
+        : (() => {
+            for (let i = 0; i < pageRefs.current.length; i++) {
+              const el = pageRefs.current[i];
+              if (!el) continue;
+              const r = el.getBoundingClientRect();
+              if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) return i;
+            }
+            return null;
+          })();
+      if (hoverPage === null) {
+        if (eraseHoverIdx !== null) setEraseHoverIdx(null);
+        return;
+      }
+      const containerEl = pageRefs.current[hoverPage];
       if (!containerEl) return;
-      const point = clientToCanvas(e.clientX, e.clientY, containerEl, pages[pi]);
-
+      const point = clientToCanvas(e.clientX, e.clientY, containerEl, pages[hoverPage]);
+      let hit: number | null = null;
       for (let i = boxes.length - 1; i >= 0; i--) {
         const b = boxes[i];
-        if (b.pageIdx !== pi) continue;
+        if (b.pageIdx !== hoverPage) continue;
         if (point.x >= b.x && point.x <= b.x + b.w && point.y >= b.y && point.y <= b.y + b.h) {
-          if (!eraseBufferRef.current.has(i)) {
-            eraseBufferRef.current.add(i);
-            setPendingEraseIndexes(new Set(eraseBufferRef.current));
-          }
+          hit = i;
           break;
         }
       }
+      if (dragging) {
+        e.preventDefault();
+        if (hit !== null && !eraseBufferRef.current.has(hit)) {
+          eraseBufferRef.current.add(hit);
+          setPendingEraseIndexes(new Set(eraseBufferRef.current));
+        }
+      }
+      if (hit !== eraseHoverIdx) setEraseHoverIdx(hit);
     }
-  }, [mode, pages, boxes]);
+  }, [mode, pages, boxes, eraseHoverIdx]);
 
   const handlePointerUp = useCallback(() => {
     if (mode === "rect") {
@@ -418,9 +443,24 @@ export default function EpsteinerApp() {
       showToast("No sensitive patterns found", "info");
       return;
     }
-    history.set([...boxes, ...hits]);
+    const overlaps = (a: typeof hits[number], b: typeof boxes[number]) => {
+      if (a.pageIdx !== b.pageIdx) return false;
+      const ax2 = a.x + a.w, ay2 = a.y + a.h;
+      const bx2 = b.x + b.w, by2 = b.y + b.h;
+      const ix = Math.max(0, Math.min(ax2, bx2) - Math.max(a.x, b.x));
+      const iy = Math.max(0, Math.min(ay2, by2) - Math.max(a.y, b.y));
+      const inter = ix * iy;
+      const minArea = Math.min(a.w * a.h, b.w * b.h) || 1;
+      return inter / minArea > 0.5;
+    };
+    const fresh = hits.filter((h) => !boxes.some((b) => overlaps(h, b)));
+    if (fresh.length === 0) {
+      showToast("No new items — already auto-redacted", "info");
+      return;
+    }
+    history.set([...boxes, ...fresh]);
     audio.stamp();
-    showToast(`${hits.length} items auto-redacted`, "success");
+    showToast(`${fresh.length} items auto-redacted`, "success");
   }, [audio, boxes, hasDocument, history, pages, showToast]);
 
   const handleExport = useCallback(async () => {
@@ -565,6 +605,7 @@ export default function EpsteinerApp() {
                     drawing={drawing}
                     smartSelection={smartSelection}
                     pendingEraseIndexes={pendingEraseIndexes}
+                    eraseHoverIdx={eraseHoverIdx}
                     onPointerDown={handlePointerDown}
                     onPointerMove={handlePointerMove}
                     onPointerUp={handlePointerUp}

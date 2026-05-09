@@ -263,6 +263,7 @@ export interface PageViewProps {
   drawing: RedactionBox | null;
   smartSelection: ReadonlySet<SmartSelectionKey>;
   pendingEraseIndexes: ReadonlySet<number>;
+  eraseHoverIdx?: number | null;
   key?: number;
   onPointerDown: (e: ReactPointerEvent, pi: number) => void;
   onPointerMove: (e: ReactPointerEvent) => void;
@@ -280,19 +281,19 @@ export const PageView = (p: PageViewProps) => {
   const isView = p.mode === "view";
 
   return (
-    <div className="page-outer" ref={p.containerRef}>
-      <div className="page-wrap" style={{ width: `min(${p.zoom * 100}%, ${p.zoom * 820}px)` }}>
+    <div className="page-outer">
+      <div className="page-wrap" ref={p.containerRef} style={{ width: `min(${p.zoom * 100}%, ${p.zoom * 820}px)` }}>
         <img className="page-img" src={p.page.dataUrl} alt={`Page ${p.pageIdx + 1}`} draggable={false} />
 
         {pageBoxes.map((box, _bi) => {
           const globalIdx = p.globalBoxes.indexOf(box);
           const isPendingErase = p.pendingEraseIndexes.has(globalIdx);
+          const isHovered = isErase && p.eraseHoverIdx === globalIdx && !isPendingErase;
           return (
             <div
               key={globalIdx}
-              className={`redaction-box ${isErase ? "erasable" : ""} ${isPendingErase ? "erase-pending" : ""}`}
+              className={`redaction-box ${isErase ? "erasable" : ""} ${isPendingErase ? "erase-pending" : ""} ${isHovered ? "erase-hover" : ""}`}
               style={boxToPercentStyle(box, p.page)}
-              onClick={() => p.onEraseBox(globalIdx)}
             />
           );
         })}

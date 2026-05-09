@@ -73,11 +73,16 @@ export function useHistory<T>(initial: T) {
   type Snapshot = { items: T[]; index: number };
   const [snap, setSnap] = useState<Snapshot>({ items: [initial], index: 0 });
 
+  const MAX_HISTORY = 100;
   const set = useCallback((next: T) => {
-    setSnap(({ items, index }: Snapshot) => ({
-      items: [...items.slice(0, index + 1), next],
-      index: index + 1,
-    }));
+    setSnap(({ items, index }: Snapshot) => {
+      const trimmed = [...items.slice(0, index + 1), next];
+      if (trimmed.length <= MAX_HISTORY) {
+        return { items: trimmed, index: index + 1 };
+      }
+      const drop = trimmed.length - MAX_HISTORY;
+      return { items: trimmed.slice(drop), index: index + 1 - drop };
+    });
   }, []);
 
   const undo = useCallback(() => {

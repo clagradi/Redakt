@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import EpsteinerApp from "../redakt-v7";
+import { ErrorBoundary } from "./ErrorBoundary";
 
 const root = document.getElementById("root");
 if (!root) {
@@ -9,6 +10,8 @@ if (!root) {
 
 createRoot(root).render(
   <StrictMode>
-    <EpsteinerApp />
+    <ErrorBoundary>
+      <EpsteinerApp />
+    </ErrorBoundary>
   </StrictMode>,
 );

@@ -19,6 +19,8 @@
     "moduleDetection": "force"
   },
   "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
     "redakt-*.ts",
     "redakt-*.tsx"
   ]

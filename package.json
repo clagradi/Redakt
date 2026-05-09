@@ -3,9 +3,11 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
+  "private": true,
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "build": "tsc --noEmit"
+    "build": "tsc --noEmit",
+    "dev": "vite"
   },
   "keywords": [],
   "author": "",
@@ -15,6 +17,8 @@
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "react": "^18.3.1",
-    "typescript": "^5.6.3"
+    "react-dom": "^18.3.1",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10"
   }
 }

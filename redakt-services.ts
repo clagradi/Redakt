@@ -26,16 +26,41 @@ export async function loadPdfDocument(
     const tc = await page.getTextContent();
     const textItems = (tc.items as any[])
       .filter((it) => it.str?.trim().length > 0)
-      .map((it) => {
+      .flatMap((it) => {
+        const rawText: string = String(it.str);
         const [cx, cy]: [number, number] = viewport.convertToViewportPoint(it.transform[4], it.transform[5]);
         const fontSize = Math.abs(it.transform[3]) * RENDER_SCALE;
-        return {
-          text: it.str,
-          x: cx,
-          y: cy - fontSize,
-          w: it.width * RENDER_SCALE,
-          h: fontSize * 1.3,
-        };
+
+        const segments: string[] = rawText.match(/\S+|\s+/g) ?? [rawText];
+        if (segments.length === 1 && segments[0] === rawText) {
+          return [{
+            text: rawText,
+            x: cx,
+            y: cy - fontSize,
+            w: it.width * RENDER_SCALE,
+            h: fontSize * 1.05,
+          }];
+        }
+
+        const baseLen = rawText.length;
+        let cursor = 0;
+        return segments.flatMap((segment: string) => {
+          if (!segment.trim()) {
+            cursor += (segment.length / baseLen) * it.width * RENDER_SCALE;
+            return [];
+          }
+
+          const w = ((segment.length / baseLen) * it.width) * RENDER_SCALE;
+          const item = {
+            text: segment,
+            x: cx + cursor,
+            y: cy - fontSize,
+            w,
+            h: fontSize * 1.05,
+          };
+          cursor += (segment.length / baseLen) * it.width * RENDER_SCALE;
+          return [item];
+        });
       });
 
     out.push({

@@ -304,7 +304,11 @@ export const PageView = (p: PageViewProps) => {
 
         <div
           className={`overlay ${p.mode}`}
-          style={{ display: isView ? "none" : "block" }}
+          style={
+            isView
+              ? { display: "none" }
+              : { display: "block", pointerEvents: p.mode === "erase" ? "none" : "auto" }
+          }
           onPointerDown={(e: ReactPointerEvent) => p.onPointerDown(e, p.pageIdx)}
           onPointerMove={p.onPointerMove}
           onPointerUp={p.onPointerUp}

@@ -254,7 +254,7 @@ export default function RedaktApp() {
   }, [mode, drawing, boxes, pages, history, audio]);
 
   const handleEraseBox = useCallback((globalIdx: number) => {
-    if (mode !== "erase") return;
+    if (mode === "view") return;
     history.set(boxes.filter((_: RedactionBox, i: number) => i !== globalIdx));
     audio.click();
   }, [mode, boxes, history, audio]);

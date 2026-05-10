@@ -1,5 +1,5 @@
 import { REDAKT_STYLES } from "./redakt-styles";
-import { useState, type ChangeEvent, type FormEvent, type KeyboardEvent, type ReactNode, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent, type ReactNode, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { BILLING, STAMP_LABELS, SHORTCUTS, TOOL_MODE_CONFIG, TOOL_MODES, LANDING_FEATURES, WORKFLOW_STEPS } from "./redakt-constants";
 import { boxToPercentStyle, toSmartSelectionKey, wordToBox } from "./redakt-utils";
 import type {
@@ -351,18 +351,80 @@ export interface ModalProps {
   footer?: ReactNode;
 }
 
-export const Modal = ({ title, onClose, children, footer }: ModalProps) => (
-  <div className="modal-bg" onClick={onClose}>
-    <div className="modal" onClick={(e: ReactMouseEvent<HTMLDivElement>) => e.stopPropagation()}>
-      <div className="modal-header">
-        <div className="modal-title">{title}</div>
-        <button className="modal-close" onClick={onClose} aria-label="Close">×</button>
+export const Modal = ({ title, onClose, children, footer }: ModalProps) => {
+  const modalRef = useRef<HTMLDivElement>(null);
+  const lastFocusRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    lastFocusRef.current = document.activeElement as HTMLElement | null;
+    const root = modalRef.current;
+    if (!root) return;
+
+    const focusable = () => Array.from(
+      root.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ),
+    );
+
+    // Focus first interactive element (or the modal itself).
+    const first = focusable()[0];
+    (first ?? root).focus({ preventScroll: true });
+
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        onClose();
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const items = focusable();
+      if (items.length === 0) {
+        e.preventDefault();
+        return;
+      }
+      const active = document.activeElement as HTMLElement | null;
+      const idx = active ? items.indexOf(active) : -1;
+      if (e.shiftKey) {
+        if (idx <= 0) {
+          e.preventDefault();
+          items[items.length - 1].focus();
+        }
+      } else {
+        if (idx === items.length - 1 || idx === -1) {
+          e.preventDefault();
+          items[0].focus();
+        }
+      }
+    };
+
+    root.addEventListener("keydown", onKey);
+    return () => {
+      root.removeEventListener("keydown", onKey);
+      lastFocusRef.current?.focus?.();
+    };
+  }, [onClose]);
+
+  return (
+    <div className="modal-bg" onClick={onClose} role="presentation">
+      <div
+        ref={modalRef}
+        className="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        tabIndex={-1}
+        onClick={(e: ReactMouseEvent<HTMLDivElement>) => e.stopPropagation()}
+      >
+        <div className="modal-header">
+          <div className="modal-title">{title}</div>
+          <button className="modal-close" onClick={onClose} aria-label="Close">×</button>
+        </div>
+        <div className="modal-body">{children}</div>
+        {footer && <div className="modal-footer">{footer}</div>}
       </div>
-      <div className="modal-body">{children}</div>
-      {footer && <div className="modal-footer">{footer}</div>}
     </div>
-  </div>
-);
+  );
+};
 
 export interface ExportModalProps {
   options: ExportOptions;
@@ -419,6 +481,33 @@ export const ExportModal = ({ options, onChange, onClose, onExport }: ExportModa
           onChange={(e: ChangeEvent<HTMLInputElement>) => setOpt("watermark", e.target.value)}
         />
       </div>
+
+      <div className="field">
+        <label className="field-label">Password (optional)</label>
+        <input
+          className="field-input"
+          type="password"
+          autoComplete="new-password"
+          placeholder="Lock the PDF — printing & copy disabled"
+          value={options.password ?? ""}
+          onChange={(e: ChangeEvent<HTMLInputElement>) => setOpt("password", e.target.value)}
+        />
+        <div className="field-hint">
+          Required to open. Cannot be recovered if lost — keep a copy.
+        </div>
+      </div>
+
+      <label className="field-checkbox">
+        <input
+          type="checkbox"
+          checked={!!options.generateReceipt}
+          onChange={(e: ChangeEvent<HTMLInputElement>) => setOpt("generateReceipt", e.target.checked)}
+        />
+        <span>
+          <strong>Download audit receipt</strong>
+          <small>JSON sidecar with SHA-256 hash, region map, timestamp — for compliance / records.</small>
+        </span>
+      </label>
     </Modal>
   );
 };
@@ -557,50 +646,69 @@ export interface LandingProps {
   onUpgradeClick: () => void;
 }
 
+const FAQ: Array<{ q: string; a: string }> = [
+  {
+    q: "Do my files ever leave my browser?",
+    a: "No. PDFs are parsed, edited and re-rendered entirely client-side using pdf.js and jsPDF. Nothing is uploaded — open DevTools → Network and you'll see no PDF traffic.",
+  },
+  {
+    q: "Are redactions actually irreversible?",
+    a: "Yes. Each page is flattened (page image + black rectangles) into a single raster before being embedded in the export. The text layer is dropped. Cmd+A on the export yields nothing.",
+  },
+  {
+    q: "What does Auto detect?",
+    a: "Local pattern detection: emails, phone numbers, dates, currency, IBANs, credit cards (Luhn-validated), US SSNs, Italian Codice Fiscale, IPs, MACs, URLs, plus capitalised name pairs after honorifics. No model. No API call.",
+  },
+  {
+    q: "What's in the audit receipt?",
+    a: "Optional JSON sidecar with a SHA-256 of the exported PDF, page count, region map, your email, timestamp, and stamp/watermark/password flags. For records & compliance.",
+  },
+  {
+    q: "Can I cancel?",
+    a: "Yes. The annual pass renews yearly via Stripe — open your billing portal anytime. We don't store card details.",
+  },
+];
+
 export const LandingPage = ({ onTrySample, onPickFile, onAccountClick, onUpgradeClick }: LandingProps) => (
   <div className="landing">
     <div className="hero">
       <div className="hero-stamp" style={{ top: "10%", left: "5%" }}>CLASSIFIED</div>
       <div className="hero-stamp" style={{ bottom: "15%", right: "3%", animationDelay: "-3s" }}>TOP SECRET</div>
 
-      <div className="hero-pretitle">— SIC Certified Document Obfuscation —</div>
+      <div className="hero-pretitle">— Local PDF redaction —</div>
       <h1 className="hero-title">EPSTEINER</h1>
       <div className="hero-divider" />
       <p className="hero-sub">
-        Upload any PDF and obscure sensitive information with the precision
-        of a federal agency. Click words, draw rectangles, search, or let local
-        auto-detection do the work. Everything runs locally in your browser — zero uploads,
-        zero tracking.
+        Black-bar sensitive text in any PDF in seconds. Auto-detect emails, phones, IBANs, credit cards.
+        Files never leave your browser — there is no server to send them to.
       </p>
       <div className="hero-cta">
-        <button className="cta-primary" onClick={onTrySample}>★ Try with a sample</button>
-        <button className="cta-secondary" onClick={onPickFile}>↑ Upload your PDF</button>
+        <button className="cta-primary" onClick={onTrySample}>★ Try with a sample · 30s</button>
+        <button className="cta-secondary" onClick={onPickFile}>↑ Open your PDF</button>
       </div>
       <div className="hero-meta">
-        <span>100% In-Browser</span>
-        <span>Local Detection</span>
-        <span>Zero Tracking</span>
+        <span>● 100% in-browser</span>
+        <span>● Burned-in redactions</span>
+        <span>● {BILLING.freeMonthlyExports} free exports / month</span>
       </div>
     </div>
 
-    <div className="pricing-band">
-      <div className="pricing-head">
-        <span>Simple launch pricing</span>
-        <strong>{BILLING.annualPrice}</strong>
+    <div className="trust-band">
+      <div className="trust-cell">
+        <div className="trust-num">0</div>
+        <div className="trust-label">Bytes uploaded</div>
       </div>
-      <div className="pricing-grid">
-        <div className="pricing-plan">
-          <div className="plan-kicker">Free account</div>
-          <div className="plan-price">$0</div>
-          <div className="plan-copy">{BILLING.freeMonthlyExports} PDF exports per month. No card required.</div>
-          <button className="btn btn-ghost full-width" onClick={onAccountClick}>Create free account</button>
-        </div>
-        <div className="pricing-plan featured">
-          <div className="plan-kicker">Annual pass</div>
-          <div className="plan-price">{BILLING.annualPrice}</div>
-          <div className="plan-copy">Unlimited exports for people who just need the joke to work.</div>
-          <button className="btn btn-gold full-width" onClick={onUpgradeClick}>Unlock unlimited</button>
-        </div>
+      <div className="trust-cell">
+        <div className="trust-num">SHA-256</div>
+        <div className="trust-label">Audit receipt on every export</div>
+      </div>
+      <div className="trust-cell">
+        <div className="trust-num">AES-128</div>
+        <div className="trust-label">Optional PDF password lock</div>
+      </div>
+      <div className="trust-cell">
+        <div className="trust-num">12+</div>
+        <div className="trust-label">PII patterns auto-detected</div>
       </div>
     </div>
 
@@ -632,8 +740,52 @@ export const LandingPage = ({ onTrySample, onPickFile, onAccountClick, onUpgrade
       </div>
     </div>
 
+    <div className="pricing-band">
+      <div className="pricing-head">
+        <span>Pricing</span>
+        <strong>{BILLING.annualPrice}</strong>
+      </div>
+      <div className="pricing-grid">
+        <div className="pricing-plan">
+          <div className="plan-kicker">Free</div>
+          <div className="plan-price">$0</div>
+          <ul className="plan-list">
+            <li>{BILLING.freeMonthlyExports} PDF exports per month</li>
+            <li>All redaction tools</li>
+            <li>Auto-detect of 12+ PII patterns</li>
+            <li>Audit receipt + password-locked PDFs</li>
+          </ul>
+          <button className="btn btn-ghost full-width" onClick={onAccountClick}>Sign in with email</button>
+        </div>
+        <div className="pricing-plan featured">
+          <div className="plan-kicker">Annual pass</div>
+          <div className="plan-price">{BILLING.annualPrice}</div>
+          <ul className="plan-list">
+            <li><strong>Unlimited</strong> exports</li>
+            <li>Priority email support</li>
+            <li>Everything in Free</li>
+            <li>Cancel anytime via Stripe portal</li>
+          </ul>
+          <button className="btn btn-gold full-width" onClick={onUpgradeClick}>Unlock unlimited</button>
+        </div>
+      </div>
+    </div>
+
+    <div className="faq">
+      <div className="faq-h">— FAQ —</div>
+      <div className="faq-t">Things you might be wondering</div>
+      <div className="faq-list">
+        {FAQ.map(({ q, a }) => (
+          <details className="faq-row" key={q}>
+            <summary>{q}</summary>
+            <p>{a}</p>
+          </details>
+        ))}
+      </div>
+    </div>
+
     <div className="footer">
-      <div className="footer-text">EPSTEINER · Sponsored by SIC (Satirical Intelligence Center)</div>
+      <div className="footer-text">EPSTEINER · Files stay in your browser · <a href="mailto:hi@epsteiner.local" style={{ color: "inherit" }}>contact</a></div>
     </div>
   </div>
 );

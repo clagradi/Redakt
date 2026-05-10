@@ -30,6 +30,23 @@ export interface ExportOptions {
   filename: string;
   stamp: StampStyle;
   watermark: string;
+  password?: string;
+  generateReceipt?: boolean;
+}
+
+export interface RedactionReceipt {
+  schema: "epsteiner.receipt.v1";
+  generatedAt: string;
+  documentName: string;
+  pageCount: number;
+  redactionCount: number;
+  redactionsPerPage: Record<number, number>;
+  exporter: { email: string; plan: AccountPlan } | null;
+  stamp: StampStyle;
+  watermarked: boolean;
+  passwordProtected: boolean;
+  outputSha256: string;
+  regions: Array<{ pageIdx: number; x: number; y: number; w: number; h: number }>;
 }
 
 export type AccountPlan = "free" | "annual";

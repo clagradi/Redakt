@@ -253,10 +253,45 @@ export const REDAKT_STYLES = `
       color:var(--text3); text-transform:uppercase; margin-bottom:8px; }
     .plan-price { font-family:'Oswald',sans-serif; font-size:28px; color:#ddd; margin-bottom:8px; }
     .plan-copy { min-height:38px; font-size:12px; color:var(--text2); line-height:1.5; margin-bottom:14px; }
+    .plan-list { list-style:none; padding:0; margin:0 0 16px; min-height:120px; }
+    .plan-list li { font-size:12px; color:var(--text); line-height:1.55; padding:5px 0 5px 16px;
+      position:relative; }
+    .plan-list li::before { content:'✓'; color:var(--gold2); position:absolute; left:0;
+      font-weight:700; font-size:11px; }
+    .plan-list li strong { color:#ebebeb; }
+
+    .trust-band { display:grid; grid-template-columns:repeat(4,1fr);
+      max-width:1100px; margin:0 auto; background:var(--border); border-top:1px solid var(--border);
+      border-bottom:1px solid var(--border); }
+    .trust-cell { padding:24px 20px; background:var(--bg2); text-align:center;
+      display:flex; flex-direction:column; gap:6px; }
+    .trust-num { font-family:'Oswald',sans-serif; font-size:24px; color:var(--gold2);
+      letter-spacing:1px; }
+    .trust-label { font-family:'Oswald',sans-serif; font-size:9.5px; letter-spacing:2.5px;
+      color:var(--text3); text-transform:uppercase; }
     @media (max-width:720px) {
       .pricing-head, .pricing-grid { grid-template-columns:1fr; display:grid; }
       .pricing-head { align-items:start; }
+      .trust-band { grid-template-columns:1fr 1fr; }
     }
+
+    .faq { padding:56px 24px; background:var(--bg3); border-top:1px solid var(--border); }
+    .faq-h { text-align:center; font-family:'Oswald',sans-serif; font-size:11px;
+      letter-spacing:4px; color:var(--gold); text-transform:uppercase; margin-bottom:8px; }
+    .faq-t { text-align:center; font-family:'Oswald',sans-serif; font-size:24px;
+      letter-spacing:2px; color:#ddd; text-transform:uppercase; margin-bottom:32px; font-weight:400; }
+    .faq-list { max-width:760px; margin:0 auto; display:flex; flex-direction:column; gap:1px;
+      background:var(--border); border:1px solid var(--border); }
+    .faq-row { background:var(--bg2); padding:0; }
+    .faq-row summary { padding:16px 20px; cursor:pointer; font-size:13px; color:#ddd;
+      list-style:none; display:flex; align-items:center; justify-content:space-between;
+      gap:16px; user-select:none; }
+    .faq-row summary::-webkit-details-marker { display:none; }
+    .faq-row summary::after { content:'+'; color:var(--gold2); font-size:18px;
+      font-family:'Oswald',sans-serif; transition:transform .15s; }
+    .faq-row[open] summary::after { content:'−'; }
+    .faq-row p { padding:0 20px 18px; margin:0; font-size:12.5px; line-height:1.65;
+      color:var(--text); }
 
     .features { padding:60px 24px; background:var(--bg2);
       border-top:1px solid var(--border); border-bottom:1px solid var(--border); }
@@ -319,6 +354,15 @@ export const REDAKT_STYLES = `
       color:#ccc; font-family:'JetBrains Mono',monospace; font-size:12px;
       padding:8px 10px; outline:none; }
     .field-input:focus { border-color:var(--gold); }
+    .field-hint { font-size:11px; color:var(--text3); margin-top:6px; line-height:1.5; }
+    .field-checkbox { display:flex; align-items:flex-start; gap:10px; padding:12px;
+      border:1px solid var(--border2); background:var(--bg3); cursor:pointer;
+      transition:border-color .15s, background .15s; margin-bottom:16px; }
+    .field-checkbox:hover { border-color:var(--border3); background:var(--bg4); }
+    .field-checkbox input { margin-top:3px; flex-shrink:0; accent-color:var(--gold2); }
+    .field-checkbox > span { display:flex; flex-direction:column; gap:4px; }
+    .field-checkbox strong { font-size:12.5px; color:#ddd; font-weight:600; }
+    .field-checkbox small { font-size:11px; color:var(--text3); line-height:1.5; }
     .account-form { display:flex; flex-direction:column; gap:10px; }
     .account-box { border:1px solid var(--border2); background:var(--bg3); padding:14px; }
     .account-email { font-family:'JetBrains Mono',monospace; font-size:12px; color:#ddd; margin-bottom:6px; }

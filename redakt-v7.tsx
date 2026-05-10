@@ -93,6 +93,8 @@ export default function EpsteinerApp() {
     filename: "redacted_document",
     stamp: "redacted",
     watermark: "",
+    password: "",
+    generateReceipt: false,
   });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -126,57 +128,80 @@ export default function EpsteinerApp() {
   const zoomIn = () => setZoom((z: number) => clamp(round2(z + ZOOM.STEP), ZOOM.MIN, ZOOM.MAX));
   const zoomOut = () => setZoom((z: number) => clamp(round2(z - ZOOM.STEP), ZOOM.MIN, ZOOM.MAX));
 
+  const cancelInFlightInteractions = useCallback(() => {
+    if (drawing) {
+      setDrawing(null);
+      drawStartRef.current = null;
+      activeDrawPageRef.current = null;
+    }
+    if (smartActiveRef.current) {
+      smartActiveRef.current = false;
+      smartBufferRef.current = new Set();
+      smartActivePageRef.current = null;
+      setSmartSel(new Set());
+    }
+    if (eraseActiveRef.current) {
+      eraseActiveRef.current = false;
+      eraseBufferRef.current = new Set();
+      eraseActivePageRef.current = null;
+      setPendingEraseIndexes(new Set());
+    }
+  }, [drawing]);
+
+  // Single source of truth for keyboard bindings. Each binding is tested in order;
+  // the first whose `match` returns true runs `run` and stops propagation.
+  type Binding = {
+    match: (e: KeyboardEvent) => boolean;
+    run: (e: KeyboardEvent) => void;
+    preventDefault?: boolean;
+  };
+
+  const bindings: Binding[] = useMemo(() => {
+    const isMod = (e: KeyboardEvent) => e.ctrlKey || e.metaKey;
+    const toggleMode = (target: EditorMode) =>
+      setMode((m: EditorMode) => (m === target ? "view" : target));
+
+    return [
+      { match: (e) => isMod(e) && e.key.toLowerCase() === "z" && !e.shiftKey,
+        run: () => { history.undo(); audio.click(); }, preventDefault: true },
+      { match: (e) => isMod(e) && (e.key.toLowerCase() === "y" || (e.shiftKey && e.key.toLowerCase() === "z")),
+        run: () => { history.redo(); audio.click(); }, preventDefault: true },
+      { match: (e) => !isMod(e) && e.key.toLowerCase() === "s",
+        run: () => toggleMode("smart") },
+      { match: (e) => !isMod(e) && e.key.toLowerCase() === "r",
+        run: () => toggleMode("rect") },
+      { match: (e) => !isMod(e) && e.key.toLowerCase() === "e",
+        run: () => toggleMode("erase") },
+      { match: (e) => !isMod(e) && (e.key === "+" || e.key === "="),
+        run: () => zoomIn() },
+      { match: (e) => !isMod(e) && e.key === "-",
+        run: () => zoomOut() },
+      { match: (e) => !isMod(e) && e.key === "?",
+        run: () => setHelpOpen((o) => !o) },
+      { match: (e) => !isMod(e) && e.key === "/",
+        run: () => setSearchOpen(true), preventDefault: true },
+      { match: (e) => !isMod(e) && e.key === "Escape",
+        run: () => {
+          cancelInFlightInteractions();
+          if (helpOpen) setHelpOpen(false);
+          else if (exportOpen) setExportOpen(false);
+          else if (accountOpen) setAccountOpen(false);
+          else if (paywallOpen) setPaywallOpen(false);
+          else if (searchOpen) setSearchOpen(false);
+          else setMode("view");
+        } },
+    ];
+  }, [audio, history, cancelInFlightInteractions, helpOpen, exportOpen, accountOpen, paywallOpen, searchOpen]);
+
   useKeyboardShortcuts(useCallback((e: KeyboardEvent) => {
-    const mod = e.ctrlKey || e.metaKey;
-    if (mod && e.key.toLowerCase() === "z" && !e.shiftKey) {
-      e.preventDefault();
-      history.undo();
-      audio.click();
-    } else if (mod && (e.key.toLowerCase() === "y" || (e.shiftKey && e.key.toLowerCase() === "z"))) {
-      e.preventDefault();
-      history.redo();
-      audio.click();
-    } else if (!mod) {
-      const k = e.key.toLowerCase();
-      if (k === "s") setMode((m: EditorMode) => (m === "smart" ? "view" : "smart"));
-      else if (k === "r") setMode((m: EditorMode) => (m === "rect" ? "view" : "rect"));
-      else if (k === "e") setMode((m: EditorMode) => (m === "erase" ? "view" : "erase"));
-      else if (k === "escape") {
-        // Cancel any in-flight drag/selection first.
-        if (drawing) {
-          setDrawing(null);
-          drawStartRef.current = null;
-          activeDrawPageRef.current = null;
-        }
-        if (smartActiveRef.current) {
-          smartActiveRef.current = false;
-          smartBufferRef.current = new Set();
-          smartActivePageRef.current = null;
-          setSmartSel(new Set());
-        }
-        if (eraseActiveRef.current) {
-          eraseActiveRef.current = false;
-          eraseBufferRef.current = new Set();
-          eraseActivePageRef.current = null;
-          setPendingEraseIndexes(new Set());
-        }
-        // Close any open overlay.
-        if (helpOpen) setHelpOpen(false);
-        else if (exportOpen) setExportOpen(false);
-        else if (accountOpen) setAccountOpen(false);
-        else if (paywallOpen) setPaywallOpen(false);
-        else if (searchOpen) setSearchOpen(false);
-        else setMode("view");
-      }
-      else if (k === "+" || k === "=") zoomIn();
-      else if (k === "-") zoomOut();
-      else if (e.key === "?") setHelpOpen((o: boolean) => !o);
-      else if (e.key === "/") {
-        e.preventDefault();
-        setSearchOpen(true);
+    for (const b of bindings) {
+      if (b.match(e)) {
+        if (b.preventDefault) e.preventDefault();
+        b.run(e);
+        return;
       }
     }
-  }, [audio, history, drawing, helpOpen, exportOpen, accountOpen, paywallOpen, searchOpen]));
+  }, [bindings]));
 
   const handleLoadFile = useCallback(async (file: File | null | undefined) => {
     if (!file) return;
@@ -545,11 +570,16 @@ export default function EpsteinerApp() {
     setIsLoading(true);
     setLoadingMsg("Generating redacted PDF…");
     try {
-      await exportRedactedPdf(pages, boxes, exportOpts);
+      const result = await exportRedactedPdf(pages, boxes, exportOpts, account);
       const updated = await recordPdfExport(account);
       setAccount(updated);
       audio.stamp();
-      showToast("PDF exported", "success");
+      showToast(
+        exportOpts.generateReceipt
+          ? `Exported ${result.filename} + receipt`
+          : `Exported ${result.filename}`,
+        "success",
+      );
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error";
       showToast(`Export error: ${msg}`, "error");

@@ -1,6 +1,6 @@
 import { CDN, STAMP_LABELS, RENDER_SCALE } from "./redakt-constants";
 import { loadExternalScript, wordToBox } from "./redakt-utils";
-import type { ExportOptions, PageData, RedactionBox } from "./redakt-types";
+import type { AccountState, ExportOptions, PageData, RedactionBox, RedactionReceipt } from "./redakt-types";
 
 export async function loadPdfDocument(
   file: File,
@@ -201,11 +201,35 @@ temporary location: 12 Park Avenue, NY. Access code: 4477-OMEGA.`;
   return new File([blob], "sample_classified.pdf", { type: "application/pdf" });
 }
 
+const sha256Hex = async (buf: ArrayBuffer): Promise<string> => {
+  const hash = await crypto.subtle.digest("SHA-256", buf);
+  return Array.from(new Uint8Array(hash))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+};
+
+const downloadBlob = (blob: Blob, filename: string): void => {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
+
+export interface ExportResult {
+  filename: string;
+  receipt: RedactionReceipt;
+}
+
 export async function exportRedactedPdf(
   pages: PageData[],
-  boxes: Array<{ pageIdx: number; x: number; y: number; w: number; h: number }>,
+  boxes: RedactionBox[],
   opts: ExportOptions,
-): Promise<void> {
+  account: AccountState | null = null,
+): Promise<ExportResult> {
   await loadExternalScript(CDN.jsPdf);
   const { jsPDF } = (window as any).jspdf;
   const first = pages[0];
@@ -277,7 +301,53 @@ export async function exportRedactedPdf(
     .replace(/[^\w\s.-]+/g, "")
     .replace(/\s+/g, "_")
     .slice(0, 80) || "redacted_document";
-  doc.save(`${safeName}.pdf`);
+
+  // Optional password protection (jsPDF supports user + owner passwords).
+  const password = opts.password?.trim();
+  if (password) {
+    (doc as any).setEncryption?.("user", password, password, [
+      "print", "modify", "copy", "annot-forms",
+    ]);
+  }
+
+  const pdfBlob: Blob = doc.output("blob");
+  const pdfBuffer = await pdfBlob.arrayBuffer();
+  const outputSha256 = await sha256Hex(pdfBuffer);
+
+  downloadBlob(pdfBlob, `${safeName}.pdf`);
+
+  const redactionsPerPage: Record<number, number> = {};
+  boxes.forEach((b) => {
+    redactionsPerPage[b.pageIdx] = (redactionsPerPage[b.pageIdx] ?? 0) + 1;
+  });
+
+  const receipt: RedactionReceipt = {
+    schema: "epsteiner.receipt.v1",
+    generatedAt: new Date().toISOString(),
+    documentName: safeName,
+    pageCount: pages.length,
+    redactionCount: totalRedactions,
+    redactionsPerPage,
+    exporter: account ? { email: account.email, plan: account.plan } : null,
+    stamp: opts.stamp,
+    watermarked: !!opts.watermark.trim(),
+    passwordProtected: !!password,
+    outputSha256,
+    regions: boxes.map((b) => ({
+      pageIdx: b.pageIdx,
+      x: Math.round(b.x),
+      y: Math.round(b.y),
+      w: Math.round(b.w),
+      h: Math.round(b.h),
+    })),
+  };
+
+  if (opts.generateReceipt) {
+    const json = JSON.stringify(receipt, null, 2);
+    downloadBlob(new Blob([json], { type: "application/json" }), `${safeName}.receipt.json`);
+  }
+
+  return { filename: `${safeName}.pdf`, receipt };
 }
 
 const SENSITIVE_LABELS = new Set([

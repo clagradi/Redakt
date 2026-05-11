@@ -112,6 +112,17 @@ export function onAccountChange(cb: (account: AccountState | null) => void): () 
 // Stripe checkout
 // ─────────────────────────────────────────────────────────────────────────────
 
+const readApiError = async (res: Response): Promise<string> => {
+  const body = await res.text().catch(() => "");
+  if (!body) return `Request failed (${res.status})`;
+  try {
+    const parsed = JSON.parse(body) as { error?: string };
+    return parsed.error || body;
+  } catch {
+    return body;
+  }
+};
+
 export async function startCheckout(): Promise<{ ok: boolean; error?: string }> {
   if (!supabase) return { ok: false, error: "Backend not configured." };
   const { data: { session } } = await supabase.auth.getSession();
@@ -126,8 +137,28 @@ export async function startCheckout(): Promise<{ ok: boolean; error?: string }> 
     body: JSON.stringify({ origin: window.location.origin }),
   });
   if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    return { ok: false, error: body || `Checkout failed (${res.status})` };
+    return { ok: false, error: await readApiError(res) };
+  }
+  const { url } = (await res.json()) as { url: string };
+  window.location.href = url;
+  return { ok: true };
+}
+
+export async function openBillingPortal(): Promise<{ ok: boolean; error?: string }> {
+  if (!supabase) return { ok: false, error: "Backend not configured." };
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return { ok: false, error: "Not signed in." };
+
+  const res = await fetch("/api/billing-portal", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({ origin: window.location.origin }),
+  });
+  if (!res.ok) {
+    return { ok: false, error: await readApiError(res) };
   }
   const { url } = (await res.json()) as { url: string };
   window.location.href = url;

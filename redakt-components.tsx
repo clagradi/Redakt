@@ -515,12 +515,13 @@ export const ExportModal = ({ options, onChange, onClose, onExport }: ExportModa
 export interface AccountModalProps {
   account: AccountState | null;
   onClose: () => void;
-  onRequestSignIn: (email: string) => Promise<void> | void;
+  onRequestSignIn: (email: string) => Promise<boolean> | boolean;
   onSignOut: () => void;
   onUpgrade: () => void;
+  onManageBilling: () => void;
 }
 
-export const AccountModal = ({ account, onClose, onRequestSignIn, onSignOut, onUpgrade }: AccountModalProps) => {
+export const AccountModal = ({ account, onClose, onRequestSignIn, onSignOut, onUpgrade, onManageBilling }: AccountModalProps) => {
   const [email, setEmail] = useState(account?.email ?? "");
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
@@ -529,8 +530,8 @@ export const AccountModal = ({ account, onClose, onRequestSignIn, onSignOut, onU
     e.preventDefault();
     setBusy(true);
     try {
-      await onRequestSignIn(email);
-      setSent(true);
+      const shouldShowSentState = await onRequestSignIn(email);
+      if (shouldShowSentState) setSent(true);
     } finally {
       setBusy(false);
     }
@@ -543,7 +544,9 @@ export const AccountModal = ({ account, onClose, onRequestSignIn, onSignOut, onU
           <div className="account-email">{account.email}</div>
           <div className="account-plan">{account.plan === "annual" ? "Annual Pass" : "Free account"}</div>
           <div className="account-actions">
-            {account.plan === "free" && (
+            {account.plan === "annual" ? (
+              <button className="btn btn-gold" onClick={onManageBilling}>Manage billing</button>
+            ) : (
               <button className="btn btn-gold" onClick={onUpgrade}>Unlock {BILLING.annualPrice}</button>
             )}
             <button className="btn btn-ghost" onClick={onSignOut}>Sign out</button>
@@ -613,13 +616,18 @@ export const PaywallModal = ({
         {!account ? (
           <button className="btn btn-gold full-width" onClick={onOpenAccount}>Sign in first</button>
         ) : (
-          <button
-            className="btn btn-gold full-width"
-            onClick={handleCheckout}
-            disabled={busy || !checkoutConfigured}
-          >
-            {busy ? "Opening checkout…" : checkoutConfigured ? "Continue to checkout" : "Checkout unavailable"}
-          </button>
+          <>
+            <button
+              className="btn btn-gold full-width"
+              onClick={handleCheckout}
+              disabled={busy || !checkoutConfigured}
+            >
+              {busy ? "Opening checkout…" : checkoutConfigured ? "Continue to checkout" : "Checkout unavailable"}
+            </button>
+            {!checkoutConfigured && (
+              <div className="paywall-note">Supabase/Stripe env vars are missing, so paid checkout is disabled on this deployment.</div>
+            )}
+          </>
         )}
       </div>
     </Modal>
@@ -665,7 +673,7 @@ const FAQ: Array<{ q: string; a: string }> = [
   },
   {
     q: "Can I cancel?",
-    a: "Yes. The annual pass renews yearly via Stripe — open your billing portal anytime. We don't store card details.",
+    a: "Yes. The annual pass renews yearly via Stripe. Signed-in annual users can open Stripe billing from the account menu. We don't store card details.",
   },
 ];
 
@@ -687,9 +695,9 @@ export const LandingPage = ({ onTrySample, onPickFile, onAccountClick, onUpgrade
         <button className="cta-secondary" onClick={onPickFile}>↑ Open your PDF</button>
       </div>
       <div className="hero-meta">
-        <span>● 100% in-browser</span>
-        <span>● Burned-in redactions</span>
-        <span>● {BILLING.freeMonthlyExports} free exports / month</span>
+        <span>100% in-browser</span>
+        <span>Burned-in redactions</span>
+        <span>{BILLING.freeMonthlyExports} free exports / month</span>
       </div>
     </div>
 
@@ -785,7 +793,7 @@ export const LandingPage = ({ onTrySample, onPickFile, onAccountClick, onUpgrade
     </div>
 
     <div className="footer">
-      <div className="footer-text">EPSTEINER · Files stay in your browser · <a href="mailto:hi@epsteiner.local" style={{ color: "inherit" }}>contact</a></div>
+      <div className="footer-text">EPSTEINER · Files stay in your browser · Stripe billing</div>
     </div>
   </div>
 );

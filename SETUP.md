@@ -60,6 +60,7 @@ Then **Deployments → Redeploy** the latest commit (env var changes only take e
 4. Try to export 3 PDFs. The 4th should pop the paywall.
 5. Click **Continue to checkout** → Stripe test card `4242 4242 4242 4242` → any future date / any CVC.
 6. After payment you're redirected back with `?checkout=success`. Within ~5 seconds the badge flips to **Annual Pass**.
+7. Open **Account → Manage billing** to confirm the Stripe Customer Portal opens for cancellation/payment method changes.
 
 If step 4–6 fail, check **Stripe Dashboard → Developers → Webhooks → your endpoint → Recent deliveries** to see if the webhook fired and what it returned.
 

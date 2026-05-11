@@ -1,10 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
 
-const url = process.env.SUPABASE_URL;
+const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!url || !serviceKey) {
-  // Don't throw at import time on Vercel cold start — endpoints check this.
+  // Don't throw at import time on Vercel cold start; endpoints check this.
   console.warn("[api] SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is missing");
 }
 

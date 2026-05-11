@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import Stripe from "stripe";
 import { supabaseAdmin, getUserFromAuthHeader } from "./_lib/supabase-admin";
+import { resolveAppOrigin } from "./_lib/request-origin";
 
 const stripeKey = process.env.STRIPE_SECRET_KEY;
 const priceId = process.env.STRIPE_PRICE_ID;
@@ -23,9 +24,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  const origin = (req.body && typeof req.body === "object" && (req.body as { origin?: string }).origin) ||
-    process.env.PUBLIC_APP_URL ||
-    `https://${req.headers.host}`;
+  const bodyOrigin = req.body && typeof req.body === "object"
+    ? (req.body as { origin?: string }).origin
+    : undefined;
+  const origin = resolveAppOrigin(req, bodyOrigin);
 
   // Reuse existing Stripe customer if we already have one for this user.
   const { data: row } = await supabaseAdmin
@@ -47,16 +49,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .eq("user_id", user.id);
   }
 
-  const session = await stripe.checkout.sessions.create({
-    mode: "subscription",
-    customer: customerId,
-    line_items: [{ price: priceId, quantity: 1 }],
-    success_url: `${origin}/?checkout=success`,
-    cancel_url: `${origin}/?checkout=cancel`,
-    allow_promotion_codes: true,
-    client_reference_id: user.id,
-    metadata: { supabase_user_id: user.id },
-  });
+  try {
+    const session = await stripe.checkout.sessions.create({
+      mode: "subscription",
+      customer: customerId,
+      line_items: [{ price: priceId, quantity: 1 }],
+      success_url: `${origin}/?checkout=success`,
+      cancel_url: `${origin}/?checkout=cancel`,
+      allow_promotion_codes: true,
+      client_reference_id: user.id,
+      metadata: { supabase_user_id: user.id },
+    });
 
-  res.status(200).json({ url: session.url });
+    res.status(200).json({ url: session.url });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Checkout failed";
+    res.status(500).json({ error: message });
+  }
 }

@@ -32,6 +32,7 @@ import {
   getBillingView,
   isBackendConfigured,
   onAccountChange,
+  openBillingPortal,
   recordPdfExport,
   requestSignIn,
   signOut,
@@ -309,6 +310,12 @@ export default function EpsteinerApp() {
       params.delete("checkout");
       const next = window.location.pathname + (params.toString() ? `?${params}` : "");
       window.history.replaceState({}, "", next);
+    } else if (params.get("billing") === "return") {
+      showToast("Billing settings updated", "info");
+      fetchCurrentAccount().then(setAccount);
+      params.delete("billing");
+      const next = window.location.pathname + (params.toString() ? `?${params}` : "");
+      window.history.replaceState({}, "", next);
     }
   }, [showToast]);
 
@@ -316,15 +323,17 @@ export default function EpsteinerApp() {
     const result = await requestSignIn(email);
     if (!result.ok) {
       showToast(result.error, "error");
-      return;
+      return false;
     }
     if (result.mode === "magic-link") {
       showToast("Check your email for the sign-in link", "success");
+      return true;
     } else {
       showToast("Account ready (local mode)", "info");
       const acc = await fetchCurrentAccount();
       setAccount(acc);
       setAccountOpen(false);
+      return false;
     }
   }, [showToast]);
 
@@ -347,6 +356,15 @@ export default function EpsteinerApp() {
     }
     const res = await startCheckout();
     if (!res.ok) showToast(res.error || "Checkout failed", "error");
+  }, [showToast]);
+
+  const handleOpenBillingPortal = useCallback(async () => {
+    if (!isBackendConfigured) {
+      showToast("Backend not configured yet", "error");
+      return;
+    }
+    const res = await openBillingPortal();
+    if (!res.ok) showToast(res.error || "Billing portal failed", "error");
   }, [showToast]);
 
   const removeRedactionByIndex = useCallback((globalIdx: number) => {
@@ -748,6 +766,7 @@ export default function EpsteinerApp() {
           onRequestSignIn={handleRequestSignIn}
           onSignOut={handleSignOut}
           onUpgrade={handleOpenPaywall}
+          onManageBilling={handleOpenBillingPortal}
         />
       )}
 

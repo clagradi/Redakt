@@ -373,6 +373,8 @@ export const REDAKT_STYLES = `
     .paywall { display:flex; flex-direction:column; gap:14px; }
     .paywall-price { font-family:'Oswald',sans-serif; font-size:34px; color:var(--gold); line-height:1; }
     .paywall-copy { font-size:12px; line-height:1.6; color:var(--text2); }
+    .paywall-note { border:1px solid rgba(204,17,17,.25); background:var(--red-dim);
+      color:#d08c8c; font-size:11.5px; line-height:1.5; padding:10px 12px; }
     .launch-code-form { display:flex; flex-direction:column; gap:6px; }
     .launch-code-row { display:grid; grid-template-columns:1fr auto; gap:8px; }
     .stamp-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(110px,1fr)); gap:6px; }
